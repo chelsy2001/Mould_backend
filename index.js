@@ -1,0 +1,27 @@
+const middlewares = require("./src/middlewares/middlewares.js");
+const loginRoute = require("./src/controllers/loginAPI.js");
+const express = require("express");
+const rateLimit = require("express-rate-limit");
+
+const limiter = rateLimit({
+  //set up transaction rate limiter
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+});
+
+const app = express();
+
+app.use(limiter);
+app.use(express.json());
+app.use("/api/login", loginRoute);
+
+const PORT = process.env.PORT || 3000;
+
+// Start the server on port 3000
+app.listen(PORT, () => {
+  console.log("Server Listening on PORT:", PORT);
+});
+
+app.get("/api/status", (request, response) => {
+  middlewares.standardResponse(response, null, 200, "running");
+});

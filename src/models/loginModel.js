@@ -1,0 +1,4 @@
+let objectName = {
+  username: "",
+  password: "",
+};

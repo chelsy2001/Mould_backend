@@ -1,0 +1,16 @@
+{
+  "name": "maintainceapp",
+  "version": "1.0.0",
+  "description": "App for Lumax Maintaince Module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "author": "Shubh Vats",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.21.0",
+    "express-rate-limit": "^7.4.1",
+    "mssql": "^11.0.1"
+  }
+}
