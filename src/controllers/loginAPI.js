@@ -4,9 +4,7 @@ const middlewares = require("../middlewares/middlewares.js");
 
 const router = express.Router();
 
-// Define your routes here
 router.get("/users", (request, response) => {
-  // Execute a SELECT query
   new sqlConnection.sql.Request().query(
     "SELECT [UserName] FROM [Config_User]",
     (err, result) => {
@@ -25,20 +23,17 @@ router.get("/users", (request, response) => {
           200,
           "success"
         );
-        // response.send(result.recordset); // Send query result as response
         console.dir(result.recordset);
       }
     }
   );
 });
 
-// Define route for fetching data from SQL Server
 router.post("", (request, response) => {
-  // Execute a SELECT query
   new sqlConnection.sql.Request().query(
-    "SELECT Count(1) as temp FROM [Config_User] where UserName = '" +
+    "SELECT Count(1) AS temp FROM [Config_User] WHERE UserName = '" +
       request.body.name +
-      "' and Password = '" +
+      "' AND Password = '" +
       request.body.pass +
       "'",
     (err, result) => {

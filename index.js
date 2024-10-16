@@ -1,10 +1,10 @@
+const express = require("express");
+const rateLimit = require("express-rate-limit");
 const middlewares = require("./src/middlewares/middlewares.js");
 const loginRoute = require("./src/controllers/loginAPI.js");
 const mouldRoute = require("./src/controllers/mouldAPI.js");
 const pmRoute = require("./src/controllers/pmAPI.js");
 const sparePartRoute = require("./src/controllers/sparePartAPI.js");
-const express = require("express");
-const rateLimit = require("express-rate-limit");
 
 const limiter = rateLimit({
   //set up transaction rate limiter

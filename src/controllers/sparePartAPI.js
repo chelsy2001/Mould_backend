@@ -4,9 +4,7 @@ const middlewares = require("../middlewares/middlewares.js");
 
 const router = express.Router();
 
-// Define your routes here
 router.get("/:mouldid", (request, response) => {
-  // Execute a SELECT  query
   new sqlConnection.sql.Request().query(
     `SELECT 
     SP.SparePartID,
@@ -39,7 +37,6 @@ WHERE
           200,
           "success"
         );
-        // response.send(result.recordset); // Send query result as response
         console.dir(result.recordset);
       }
     }
@@ -47,9 +44,8 @@ WHERE
 });
 
 router.post("/movement", (request, response) => {
-  // Execute a SELECT  query
   new sqlConnection.sql.Request().query(
-    `Update Mould_SparePartMonitoring set CurrentQuantity = CurrentQuantity -  ${request.body.Quantity} where SparePartID  = ${request.body.SparePartID}`,
+    `UPDATE Mould_SparePartMonitoring SET CurrentQuantity = CurrentQuantity -  ${request.body.Quantity} WHERE SparePartID  = ${request.body.SparePartID}`,
     (err, result) => {
       if (err) {
         middlewares.standardResponse(
@@ -66,7 +62,6 @@ router.post("/movement", (request, response) => {
           200,
           "success"
         );
-        // response.send(result.recordset); // Send query result as response
         console.dir(result.recordset);
       }
     }

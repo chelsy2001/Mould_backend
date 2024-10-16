@@ -4,9 +4,7 @@ const middlewares = require("../middlewares/middlewares.js");
 
 const router = express.Router();
 
-// Define your routes here
 router.get("/details/:machine/:mould", (request, response) => {
-  // Execute a SELECT query
   new sqlConnection.sql.Request().query(
     `SELECT 
     MM.MachineID,
@@ -49,17 +47,30 @@ ORDER BY
           200,
           "success"
         );
-        // response.send(result.recordset); // Send query result as response
         console.dir(result.recordset);
       }
     }
   );
 });
 
-router.patch("/update", (request, response) => {
-  // Execute a SELECT query
+// INSERT INTO Mould_Genealogy VALUES (${request.body.MouldID},${request.body.CurrentMouldLife},${request.body.ParameterID},${request.body.ParameterValue},${Date.now}
+
+router.post("/update", (request, response) => {
+  console.log(new Date().toISOString().slice(0, 10).replace("T", " "));
   new sqlConnection.sql.Request().query(
-    `update Mould_Monitoring set MouldStatus = ${request.body.MouldStatus} where MachineID = ${request.body.MachineID} and MouldID = ${request.body.MouldID}`,
+    `UPDATE Mould_Monitoring SET MouldStatus = ${
+      request.body.MouldStatus
+    } WHERE MachineID = ${request.body.MachineID} AND MouldID = ${
+      request.body.MouldID
+    };
+    INSERT INTO Mould_Genealogy VALUES (${request.body.MouldID},${
+      request.body.CurrentMouldLife
+    },${request.body.ParameterID},${request.body.ParameterValue},${new Date()
+      .toISOString()
+      .slice(0, 10)
+      .toString()
+      .replace("T", " ")})
+    `,
     (err, result) => {
       if (err) {
         middlewares.standardResponse(
@@ -76,7 +87,6 @@ router.patch("/update", (request, response) => {
           200,
           "success"
         );
-        // response.send(result.recordset); // Send query result as response
         console.dir(result.recordset);
       }
     }
@@ -84,10 +94,8 @@ router.patch("/update", (request, response) => {
 });
 
 router.get("/ids", (request, response) => {
-  // Execute a SELECT query
   new sqlConnection.sql.Request().query(
-    `SELECT MouldID, MouldName, MouldDesc FROM Config_Mould
-`,
+    `SELECT MouldID, MouldName, MouldDesc FROM Config_Mould`,
     (err, result) => {
       if (err) {
         middlewares.standardResponse(
@@ -104,7 +112,56 @@ router.get("/ids", (request, response) => {
           200,
           "success"
         );
-        // response.send(result.recordset); // Send query result as response
+        console.dir(result.recordset);
+      }
+    }
+  );
+});
+
+//Get Mould details
+router.get("/details/:mouldid", (request, response) => {
+  new sqlConnection.sql.Request().query(
+    `SELECT 
+    CM.MouldID,
+    CM.MouldName,
+    CM.MouldDesc,
+    CM.MouldLife,
+    CM.MouldHCThreshold,
+    CM.MouldStorageLoc,
+    CM.MouldStatus,
+    MM.MachineID,
+    MM.MouldActualLife,
+    MM.HealthCheckThreshold,
+    MM.NextPMDue,
+    MM.PMWarning,
+    MM.MouldLifeStatus,
+    MM.MouldPMStatus,
+    MM.MouldHealthStatus 
+FROM 
+    Config_Mould AS CM
+JOIN 
+    Mould_Monitoring AS MM 
+ON 
+    CM.MouldID = MM.MouldID
+WHERE 
+    CM.MouldID = ${request.params.mouldid};
+    `,
+    (err, result) => {
+      if (err) {
+        middlewares.standardResponse(
+          response,
+          null,
+          300,
+          "Error executing query: " + err
+        );
+        console.error("Error executing query:", err);
+      } else {
+        middlewares.standardResponse(
+          response,
+          result.recordset,
+          200,
+          "success"
+        );
         console.dir(result.recordset);
       }
     }
