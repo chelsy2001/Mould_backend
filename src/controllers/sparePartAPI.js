@@ -1,14 +1,28 @@
 const express = require("express");
-const sqlConnection = require("../databases/ssmsConn");
+const sqlConnection = require("../databases/ssmsConn.js");
 const middlewares = require("../middlewares/middlewares.js");
 
 const router = express.Router();
 
 // Define your routes here
-router.get("/users", (request, response) => {
-  // Execute a SELECT query
+router.get("/:mouldid", (request, response) => {
+  // Execute a SELECT  query
   new sqlConnection.sql.Request().query(
-    "SELECT [UserName] FROM [Config_User]",
+    `SELECT 
+    SP.SparePartID,
+    SP.SparePartName,
+    SP.LotSize,
+    SP.SparePartLoc,
+    SP.SpareWarningQuantity,
+    SP.SpareAlarmQuantity,
+    SPM.CurrentQuantity,
+    SPM.SparePartStatus
+FROM 
+    Config_SparePart AS SP
+JOIN 
+    Mould_SparePartMonitoring AS SPM ON SP.SparePartID = SPM.SparePartID
+WHERE 
+    SP.MouldID = ${request.params.mouldid};`,
     (err, result) => {
       if (err) {
         middlewares.standardResponse(
@@ -32,17 +46,11 @@ router.get("/users", (request, response) => {
   );
 });
 
-// Define route for fetching data from SQL Server
-router.post("", (request, response) => {
-  // Execute a SELECT query
+router.post("/movement", (request, response) => {
+  // Execute a SELECT  query
   new sqlConnection.sql.Request().query(
-    "SELECT Count(1) as temp FROM [Config_User] where UserName = '" +
-      request.body.name +
-      "' and Password = '" +
-      request.body.pass +
-      "'",
+    `Update Mould_SparePartMonitoring set CurrentQuantity = CurrentQuantity -  ${request.body.Quantity} where SparePartID  = ${request.body.SparePartID}`,
     (err, result) => {
-      console.log(result.recordset[0].temp);
       if (err) {
         middlewares.standardResponse(
           response,
@@ -52,16 +60,14 @@ router.post("", (request, response) => {
         );
         console.error("Error executing query:", err);
       } else {
-        if (parseInt(result.recordset[0].temp) > 0) {
-          middlewares.standardResponse(response, null, 200, "success");
-        } else {
-          middlewares.standardResponse(
-            response,
-            null,
-            300,
-            "failure/ validation failed"
-          );
-        }
+        middlewares.standardResponse(
+          response,
+          result.recordset,
+          200,
+          "success"
+        );
+        // response.send(result.recordset); // Send query result as response
+        console.dir(result.recordset);
       }
     }
   );
