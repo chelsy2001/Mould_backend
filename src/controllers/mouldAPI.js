@@ -1,6 +1,7 @@
 const express = require("express");
 const sqlConnection = require("../databases/ssmsConn");
 const middlewares = require("../middlewares/middlewares.js");
+const moment = require("moment");
 
 const router = express.Router();
 
@@ -18,7 +19,7 @@ router.get("/details/:machine/:mould", (request, response) => {
     MM.MouldHealthStatus,
     MM.MouldStatus,
     PE.PlanID,
-    PE.ProuductGroupID,
+    PE.ProductGroupID,
     PE.PlanStatus
 FROM 
     [dbo].[Mould_Monitoring] MM
@@ -56,7 +57,7 @@ ORDER BY
 // INSERT INTO Mould_Genealogy VALUES (${request.body.MouldID},${request.body.CurrentMouldLife},${request.body.ParameterID},${request.body.ParameterValue},${Date.now}
 
 router.post("/update", (request, response) => {
-  console.log(new Date().toISOString().slice(0, 10).replace("T", " "));
+  console.log(moment().format("yyyy-MM-DD"));
   new sqlConnection.sql.Request().query(
     `UPDATE Mould_Monitoring SET MouldStatus = ${
       request.body.MouldStatus
@@ -65,11 +66,9 @@ router.post("/update", (request, response) => {
     };
     INSERT INTO Mould_Genealogy VALUES (${request.body.MouldID},${
       request.body.CurrentMouldLife
-    },${request.body.ParameterID},${request.body.ParameterValue},${new Date()
-      .toISOString()
-      .slice(0, 10)
-      .toString()
-      .replace("T", " ")})
+    },${request.body.ParameterID},${
+      request.body.ParameterValue
+    },${moment().format("yyyy-MM-DD")})
     `,
     (err, result) => {
       if (err) {
