@@ -69,6 +69,10 @@ router.post("/update", (request, response) => {
     },${request.body.ParameterID},${
       request.body.ParameterValue
     },${moment().format("yyyy-MM-DD")})
+
+    UPDATE  CONFIG_MOULD set MouldStatus = ${
+      request.body.MouldStatus
+    } where MouldID = ${request.body.MouldID}; 
     `,
     (err, result) => {
       if (err) {
@@ -113,11 +117,16 @@ router.post("/load", (request, response) => {
             } WHERE MachineID = ${request.body.MachineID} AND MouldID = ${
               request.body.MouldID
             };
+
             INSERT INTO Mould_Genealogy VALUES (${request.body.MouldID},${
               request.body.CurrentMouldLife
             },${request.body.ParameterID},${
               request.body.ParameterValue
-            },${moment().format("yyyy-MM-DD")})
+            },${moment().format("yyyy-MM-DD")});
+
+            UPDATE  CONFIG_MOULD set MouldStatus = ${
+              request.body.MouldStatus
+            } where MouldID = ${request.body.MouldID};
             `,
             (err, result) => {
               if (err) {
@@ -161,8 +170,11 @@ router.post("/load", (request, response) => {
               request.body.CurrentMouldLife
             },${request.body.ParameterID},${
               request.body.ParameterValue
-            },${moment().format("yyyy-MM-DD")})
-            ;`,
+            },${moment().format("yyyy-MM-DD")});
+            
+            UPDATE CONFIG_MOULD set MouldStatus = ${
+              request.body.MouldStatus
+            } where MouldID = ${request.body.MouldID};`,
             (err, result) => {
               if (err) {
                 middlewares.standardResponse(
