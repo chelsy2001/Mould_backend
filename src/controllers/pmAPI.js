@@ -6,7 +6,7 @@ const router = express.Router();
 
 router.patch("/update", (request, response) => {
   new sqlConnection.sql.Request().query(
-    `UPDATE Mould_Monitoring SET MouldPMStatus = ${request.body.MouldPMStatus} WHERE MouldID = ${request.body.MouldID}`,
+    `EXEC [SP_OnPMConfirmationButton] @MouldID = ${request.body.MouldID};`,
     (err, result) => {
       if (err) {
         middlewares.standardResponse(
