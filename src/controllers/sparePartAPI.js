@@ -20,7 +20,7 @@ FROM
 JOIN 
     Mould_SparePartMonitoring AS SPM ON SP.SparePartID = SPM.SparePartID
 WHERE 
-    SP.MouldID = ${request.params.mouldid};`,
+    SP.MouldID = \'${request.params.mouldid}\';`,
     (err, result) => {
       if (err) {
         middlewares.standardResponse(

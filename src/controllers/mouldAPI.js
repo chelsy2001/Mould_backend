@@ -61,18 +61,18 @@ router.post("/update", (request, response) => {
   new sqlConnection.sql.Request().query(
     `UPDATE Mould_Monitoring SET MouldStatus = ${
       request.body.MouldStatus
-    } WHERE MachineID = ${request.body.MachineID} AND MouldID = ${
+    } WHERE MachineID =  \'${request.body.MachineID}\' AND MouldID = \'${
       request.body.MouldID
-    };
-    INSERT INTO Mould_Genealogy VALUES (${request.body.MouldID},${
+    }\';
+    INSERT INTO Mould_Genealogy VALUES (\'${request.body.MouldID}\',${
       request.body.CurrentMouldLife
     },${request.body.ParameterID},${
       request.body.ParameterValue
     },${moment().format("yyyy-MM-DD")})
 
-    UPDATE  CONFIG_MOULD set MouldStatus = ${
+    UPDATE CONFIG_MOULD set MouldStatus = ${
       request.body.MouldStatus
-    } where MouldID = ${request.body.MouldID}; 
+    } where MouldID = \'${request.body.MouldID}\'; 
     `,
     (err, result) => {
       if (err) {
@@ -99,7 +99,7 @@ router.post("/update", (request, response) => {
 router.post("/load", (request, response) => {
   console.log(moment().format("yyyy-MM-DD"));
   new sqlConnection.sql.Request().query(
-    `SELECT Count(1) AS temp FROM [PPMS].[dbo].[Mould_Monitoring] where MachineID = ${request.body.MachineID} and MouldID = ${request.body.MouldID}`,
+    `SELECT Count(1) AS temp FROM [PPMS].[dbo].[Mould_Monitoring] where MachineID = \'${request.body.MachineID}\' and MouldID = \'${request.body.MouldID}\'`,
     (err, result) => {
       if (err) {
         middlewares.standardResponse(
@@ -114,11 +114,11 @@ router.post("/load", (request, response) => {
           new sqlConnection.sql.Request().query(
             `UPDATE Mould_Monitoring SET MouldStatus = ${
               request.body.MouldStatus
-            } WHERE MachineID = ${request.body.MachineID} AND MouldID = ${
+            } WHERE MachineID = \'${request.body.MachineID}\' AND MouldID = \'${
               request.body.MouldID
-            };
+            }\';
 
-            INSERT INTO Mould_Genealogy VALUES (${request.body.MouldID},${
+            INSERT INTO Mould_Genealogy VALUES (\'${request.body.MouldID}\',${
               request.body.CurrentMouldLife
             },${request.body.ParameterID},${
               request.body.ParameterValue
@@ -126,7 +126,7 @@ router.post("/load", (request, response) => {
 
             UPDATE  CONFIG_MOULD set MouldStatus = ${
               request.body.MouldStatus
-            } where MouldID = ${request.body.MouldID};
+            } where MouldID = \'${request.body.MouldID}\';
             `,
             (err, result) => {
               if (err) {
@@ -150,9 +150,9 @@ router.post("/load", (request, response) => {
           );
         } else {
           new sqlConnection.sql.Request().query(
-            `INSERT INTO [Mould_Monitoring] VALUES (${request.body.MachineID},${
-              request.body.MouldID
-            },${request.body.MouldActualLife},${
+            `INSERT INTO [Mould_Monitoring] VALUES (\'${
+              request.body.MachineID
+            }\',\'${request.body.MouldID}\',${request.body.MouldActualLife},${
               request.body.HealthCheckThreshold
             },${request.body.NextPMDue},${request.body.PMWarning},${
               request.body.HealthCheckDue
@@ -162,11 +162,13 @@ router.post("/load", (request, response) => {
               request.body.MouldStatus
             },'${moment().format("yyyy-MM-DD")}');
             
-            INSERT INTO Mould_MachineLog VALUES (${request.body.MouldID},${
-              request.body.MachineID
-            },${request.body.MouldStatus},${moment().format("yyyy-MM-DD")});
+            INSERT INTO Mould_MachineLog VALUES (\'${
+              request.body.MouldID
+            }\',\'${request.body.MachineID}\',${
+              request.body.MouldStatus
+            },${moment().format("yyyy-MM-DD")});
 
-            INSERT INTO Mould_Genealogy VALUES (${request.body.MouldID},${
+            INSERT INTO Mould_Genealogy VALUES (\'${request.body.MouldID}\',${
               request.body.CurrentMouldLife
             },${request.body.ParameterID},${
               request.body.ParameterValue
@@ -174,7 +176,7 @@ router.post("/load", (request, response) => {
             
             UPDATE CONFIG_MOULD set MouldStatus = ${
               request.body.MouldStatus
-            } where MouldID = ${request.body.MouldID};`,
+            } where MouldID = \'${request.body.MouldID}\';`,
             (err, result) => {
               if (err) {
                 middlewares.standardResponse(
@@ -252,7 +254,7 @@ JOIN
 ON 
     CM.MouldID = MM.MouldID
 WHERE 
-    CM.MouldID = ${request.params.mouldid};
+    CM.MouldID = \'${request.params.mouldid}\';
     `,
     (err, result) => {
       if (err) {
