@@ -54,14 +54,14 @@ ORDER BY
   );
 });
 
-// INSERT INTO Mould_Genealogy VALUES (${request.body.MouldID},${request.body.CurrentMouldLife},${request.body.ParameterID},${request.body.ParameterValue},${Date.now}
-
 router.post("/update", (request, response) => {
   console.log(moment().format("yyyy-MM-DD"));
   new sqlConnection.sql.Request().query(
     `UPDATE Mould_Monitoring SET MouldStatus = ${
       request.body.MouldStatus
-    } WHERE MachineID =  \'${request.body.MachineID}\' AND MouldID = \'${
+    }, MouldLifeStatus =\'${
+      request.body.MouldLifeStatus
+    }\' WHERE MachineID =  \'${request.body.MachineID}\' AND MouldID = \'${
       request.body.MouldID
     }\';
     INSERT INTO Mould_Genealogy VALUES (\'${request.body.MouldID}\',${
@@ -265,6 +265,31 @@ WHERE
           "Error executing query: " + err
         );
         console.error("Error executing query:", err);
+      } else {
+        middlewares.standardResponse(
+          response,
+          result.recordset,
+          200,
+          "success"
+        );
+        console.dir(result.recordset);
+      }
+    }
+  );
+});
+
+router.post("/users", (request, response) => {
+  new sqlConnection.sql.Request().query(
+    "Select * from Config_Users",
+    (err, result) => {
+      if (err) {
+        middlewares.standardResponse(
+          response,
+          null,
+          300,
+          "Error executing query: " + err
+        );
+        console.error("Error executing query: " + err);
       } else {
         middlewares.standardResponse(
           response,

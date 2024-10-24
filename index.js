@@ -4,6 +4,7 @@ const middlewares = require("./src/middlewares/middlewares.js");
 const loginRoute = require("./src/controllers/loginAPI.js");
 const mouldRoute = require("./src/controllers/mouldAPI.js");
 const pmRoute = require("./src/controllers/pmAPI.js");
+const hcRoute = require("./src/controllers/hcAPI.js");
 const sparePartRoute = require("./src/controllers/sparePartAPI.js");
 
 const limiter = rateLimit({
@@ -20,6 +21,7 @@ app.use(express.json());
 app.use("/api/login", loginRoute);
 app.use("/api/mould", mouldRoute);
 app.use("/api/pm", pmRoute);
+app.use("/api/hc", hcRoute);
 app.use("/api/sparepart", sparePartRoute);
 
 const PORT = process.env.PORT || 3000;
