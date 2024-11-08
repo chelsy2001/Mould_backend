@@ -135,7 +135,7 @@ router.post("/load", (request, response) => {
           );
         } else {
           new sqlConnection.sql.Request().query(
-            `INSERT INTO [Mould_Monitoring] VALUES (\'${request.body.MachineID}\',\'${request.body.MouldID}\',${request.body.MouldActualLife},${request.body.HealthCheckThreshold},${request.body.NextPMDue},${request.body.PMWarning},${request.body.HealthCheckDue},${request.body.HealthCheckWarning},${request.body.MouldLifeStatus},${request.body.MouldPMStatus},${request.body.MouldHealthStatus},${request.body.MouldStatus},GETDATE());
+            `INSERT INTO [Mould_Monitoring] VALUES (\'${request.body.MachineID}\',\'${request.body.MouldID}\',${request.body.MouldActualLife},${request.body.HealthCheckThreshold},${request.body.NextPMDue},${request.body.PMWarning},GETDATE(),GETDATE(),${request.body.HealthCheckDue},${request.body.HealthCheckWarning},GETDATE(),GETDATE(),${request.body.MouldLifeStatus},${request.body.MouldPMStatus},${request.body.MouldHealthStatus},${request.body.MouldStatus},GETDATE());
             
             INSERT INTO Mould_MachineLog VALUES (\'${request.body.MouldID}\',\'${request.body.MachineID}\',${request.body.MouldStatus},GETDATE());
 
@@ -274,6 +274,17 @@ router.post("/addbreakdownlog", (request, response) => {
     INSERT INTO Mould_BreakDownLog VALUES
     (\'${request.body.MouldID}\',\'${request.body.BDStartTime}\',\'${request.body.BDEndTime}\',${request.body.BDDuration},
     ${request.body.TotalBDCount},\'${request.body.UserID}\',\'${request.body.BDReason}\',\'${request.body.BDRemark}\',${request.body.BDStatus},GETDATE());
+    
+    UPDATE Mould_Monitoring SET MouldStatus = ${request.body.MouldStatus}, MouldLifeStatus =\'${request.body.MouldLifeStatus}\',
+    LastUpdatedTime = GETDATE()
+    WHERE MachineID =  \'${request.body.MachineID}\' AND MouldID = \'${request.body.MouldID}\';
+ 
+    INSERT INTO Mould_Genealogy VALUES (\'${request.body.MouldID}\',${request.body.CurrentMouldLife},${request.body.ParameterID},${request.body.ParameterValue},GETDATE());
+
+    UPDATE CONFIG_MOULD set MouldStatus = ${request.body.MouldStatus},
+    LastUpdatedTime = GETDATE()
+    where MouldID = \'${request.body.MouldID}\'; 
+
     `,
     (err, result) => {
       if (err) {
