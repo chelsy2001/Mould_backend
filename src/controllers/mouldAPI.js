@@ -268,44 +268,53 @@ router.post("/users", (request, response) => {
   );
 });
 
-router.post("/addbreakdownlog", (request, response) => {
-  new sqlConnection.sql.Request().query(
-    `
-    INSERT INTO Mould_BreakDownLog VALUES
-    (\'${request.body.MouldID}\',\'${request.body.BDStartTime}\',\'${request.body.BDEndTime}\',${request.body.BDDuration},
-    ${request.body.TotalBDCount},\'${request.body.UserID}\',\'${request.body.BDReason}\',\'${request.body.BDRemark}\',${request.body.BDStatus},GETDATE());
-    
-    UPDATE Mould_Monitoring SET MouldStatus = ${request.body.MouldStatus}, MouldLifeStatus =\'${request.body.MouldLifeStatus}\',
-    LastUpdatedTime = GETDATE()
-    WHERE MachineID =  \'${request.body.MachineID}\' AND MouldID = \'${request.body.MouldID}\';
- 
-    INSERT INTO Mould_Genealogy VALUES (\'${request.body.MouldID}\',${request.body.CurrentMouldLife},${request.body.ParameterID},${request.body.ParameterValue},GETDATE());
+router.post("/addbreakdownlog", async (request, response) => {
+  try {
+    const sqlRequest = new sqlConnection.sql.Request();
 
-    UPDATE CONFIG_MOULD set MouldStatus = ${request.body.MouldStatus},
-    LastUpdatedTime = GETDATE()
-    where MouldID = \'${request.body.MouldID}\'; 
+    // Insert into Mould_BreakDownLog
+    await sqlRequest.query(`
+      INSERT INTO Mould_BreakDownLog 
+      VALUES ('${request.body.MouldID}', '${request.body.BDStartTime}', '${request.body.BDEndTime}', ${request.body.BDDuration}, 
+              ${request.body.TotalBDCount}, '${request.body.UserID}', '${request.body.BDReason}', '${request.body.BDRemark}', 
+              ${request.body.BDStatus}, GETDATE());
+    `);
+    console.log("Inserted into Mould_BreakDownLog");
 
-    `,
-    (err, result) => {
-      if (err) {
-        middlewares.standardResponse(
-          response,
-          null,
-          300,
-          "Error executing query: " + err
-        );
-        console.error("Error executing query:", err);
-      } else {
-        middlewares.standardResponse(
-          response,
-          result.recordset,
-          200,
-          "success"
-        );
-        console.dir(result.recordset);
-      }
-    }
-  );
+    // Update Mould_Monitoring
+    await sqlRequest.query(`
+      UPDATE Mould_Monitoring 
+      SET MouldStatus = ${request.body.MouldStatus}, MouldLifeStatus = '${request.body.MouldLifeStatus}', 
+          LastUpdatedTime = GETDATE()
+      WHERE MachineID = '${request.body.MachineID}' AND MouldID = '${request.body.MouldID}';
+    `);
+    console.log("Updated Mould_Monitoring");
+
+    // Insert into Mould_Genealogy
+    await sqlRequest.query(`
+      INSERT INTO Mould_Genealogy 
+      VALUES ('${request.body.MouldID}', ${request.body.CurrentMouldLife}, ${request.body.ParameterID}, 
+              ${request.body.ParameterValue}, GETDATE());
+    `);
+    console.log("Inserted into Mould_Genealogy");
+
+    // Update CONFIG_MOULD
+    await sqlRequest.query(`
+      UPDATE CONFIG_MOULD 
+      SET MouldStatus = ${request.body.MouldStatus}, LastUpdatedTime = GETDATE()
+      WHERE MouldID = '${request.body.MouldID}';
+    `);
+    console.log("Updated CONFIG_MOULD");
+
+    // Send success response if all queries succeed
+    middlewares.standardResponse(response, null, 200, "success");
+
+  } catch (err) {
+    // Send error response if any query fails
+    middlewares.standardResponse(response, null, 300, "Error executing query: " + err);
+    console.error("Error executing query:", err);
+  }
 });
+
 
 module.exports = router;
