@@ -9,11 +9,13 @@ router.get("/:mouldid", (request, response) => {
     `SELECT 
     SP.SparePartID,
     SP.SparePartName,
-    SP.LotSize,
-    SP.SparePartLoc,
-    SP.SpareWarningQuantity,
-    SP.SpareAlarmQuantity,
+    SP.SparePartSize,
+    SP.MinQuantity,
+    SP.MaxQuantity,
+    SP.ReorderLevel,
+    SPM.SparePartLoc,
     SPM.CurrentQuantity,
+    SPM.SparePartStatus,
     SPM.SparePartStatus
 FROM 
     Config_SparePart AS SP
