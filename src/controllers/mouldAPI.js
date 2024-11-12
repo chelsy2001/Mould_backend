@@ -17,15 +17,15 @@ router.get("/details/:machine/:mould", (request, response) => {
     MM.HealthCheckDue,
     MM.HealthCheckWarning,
     MM.MouldHealthStatus,
+    MM.MouldPMStatus,
+    MM.MouldLifeStatus,
     MM.MouldStatus,
-    PE.PlanID,
     PE.ProductGroupID,
-    PE.PlanStatus,
     (Select ProductName from Config_Product where ProductGroupID = PE.ProductGroupID) as ProductName
 FROM 
     [dbo].[Mould_Monitoring] MM
 JOIN 
-    [dbo].[Prod_Execution] PE ON MM.MouldID = PE.MouldID
+    [dbo].[Config_Mould] PE ON MM.MouldID = PE.MouldID
 WHERE 
     MM.MachineID = '${request.params.machine}'
 AND 
@@ -135,7 +135,7 @@ router.post("/load", (request, response) => {
           );
         } else {
           new sqlConnection.sql.Request().query(
-            `INSERT INTO [Mould_Monitoring] VALUES (\'${request.body.MachineID}\',\'${request.body.MouldID}\',${request.body.MouldActualLife},${request.body.HealthCheckThreshold},${request.body.NextPMDue},${request.body.PMWarning},GETDATE(),GETDATE(),${request.body.HealthCheckDue},${request.body.HealthCheckWarning},GETDATE(),GETDATE(),${request.body.MouldLifeStatus},${request.body.MouldPMStatus},${request.body.MouldHealthStatus},${request.body.MouldStatus},GETDATE());
+            `INSERT INTO [Mould_Monitoring] VALUES (\'${request.body.MachineID}\',\'${request.body.MouldID}\',${request.body.MouldActualLife},${request.body.HealthCheckThreshold},${request.body.NextPMDue},${request.body.PMWarning},NULL,NULL,${request.body.HealthCheckDue},${request.body.HealthCheckWarning},NULL,NULL,${request.body.MouldLifeStatus},${request.body.MouldPMStatus},${request.body.MouldHealthStatus},${request.body.MouldStatus},GETDATE());
             
             INSERT INTO Mould_MachineLog VALUES (\'${request.body.MouldID}\',\'${request.body.MachineID}\',${request.body.MouldStatus},GETDATE());
 
