@@ -7,7 +7,7 @@ const router = express.Router();
 
 router.get("/details/:machine/:mould", (request, response) => {
   new sqlConnection.sql.Request().query(
-    `SELECT 
+    ` SELECT 
     MM.MachineID,
     MM.MouldID,
     MM.MouldActualLife,
@@ -21,18 +21,19 @@ router.get("/details/:machine/:mould", (request, response) => {
     MM.MouldLifeStatus,
     MM.MouldStatus,
     PE.ProductGroupID,
-    (Select ProductName from Config_Product where ProductGroupID = PE.ProductGroupID) as ProductName
+    PG.ProductGroupName
 FROM 
     [dbo].[Mould_Monitoring] MM
 JOIN 
     [dbo].[Config_Mould] PE ON MM.MouldID = PE.MouldID
-WHERE 
+Join Config_ProductGroup PG ON PE.ProductGroupID = PG.ProductGroupID
+Where
     MM.MachineID = '${request.params.machine}'
 AND 
 	MM.MouldID = '${request.params.mould}'
 ORDER BY 
     MM.MouldID;
-`,
+    `,
     (err, result) => {
       if (err) {
         middlewares.standardResponse(
