@@ -8,7 +8,8 @@ const hcRoute = require("./src/controllers/hcAPI.js");
 const sparePartRoute = require("./src/controllers/sparePartAPI.js");
 const downtimeRoute = require("./src/controllers/downTimeApi.js");
 const reworkRoute = require("./src/controllers/reworkApi.js");
-const OEE = require("./src/controllers/oee.js")
+const OEE = require("./src/controllers/oee.js");
+const Image = require("./src/controllers/image.js")
 
 const limiter = rateLimit({
   //set up transaction rate limiter
@@ -28,7 +29,8 @@ app.use("/api/hc", hcRoute);
 app.use("/api/sparepart", sparePartRoute);
 app.use("/api/downtime",downtimeRoute);
 app.use("/api/rework",reworkRoute)
-app.use("/api/OEE",OEE)
+app.use("/api/OEE",OEE);
+app.use("/api/image",Image)
 
 
 const PORT = process.env.PORT || 3001;

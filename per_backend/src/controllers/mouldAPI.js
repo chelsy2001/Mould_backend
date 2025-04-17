@@ -20,6 +20,7 @@ router.get("/details/:EquipmentTypeID/:mould", (request, response) => {
     MM.MouldPMStatus,
     MM.MouldLifeStatus,
     MM.MouldStatus,
+    PE.MouldImage,
     PE.ProductGroupID,
     PG.ProductGroupName
 FROM 
