@@ -8,7 +8,7 @@ const router = express.Router();
 //get lossID 
 router.get("/loss", (request, response) => {
     new sqlConnection.sql.Request().query(
-      `select LossID , LossDesc from [PPMS_Solution].[dbo].[Config_LossCategory]`,
+      `select LossID , LossName from [PPMS_Solution].[dbo].[Config_LossCategory]`,
       (err, result) => {
         if (err) {
           middlewares.standardResponse(response, null, 300, "Error executing query: " + err);
@@ -20,16 +20,16 @@ router.get("/loss", (request, response) => {
   });
 
   //Get all SubLoss
-  router.get("/Subloss/LossDesc", (request, response) => {
-    const { LossDesc } = request.query; 
-    if (!LossDesc) {
-        return middlewares.standardResponse(response, null, 400, "LossDesc is required");
+  router.get("/Subloss/LossName", (request, response) => {
+    const { LossName } = request.query; 
+    if (!LossName) {
+        return middlewares.standardResponse(response, null, 400, "LossName is required");
     }
 
     const sqlRequest = new sqlConnection.sql.Request();
-    sqlRequest.input("LossDesc", sqlConnection.sql.VarChar, LossDesc);
+    sqlRequest.input("LossName", sqlConnection.sql.VarChar, LossName);
     sqlRequest.query(
-      `select s.SubLossID , s.SubLossDesc , l.LossDesc , l.LossID from [PPMS_Solution].[dbo].[Config_SubLossCategory] s
+      `select s.SubLossID , s.SubLossName , l.LossName , l.LossID from [PPMS_Solution].[dbo].[Config_SubLossCategory] s
       JOIN PPMS_Solution.dbo.Config_LossCategory l ON s.LossID = l.LossID
       `,
       (err, result) => {
@@ -81,9 +81,9 @@ router.get("/downtime/details/LineName", (request, response) => {
             d.PLCDownTime,
             d.LossID,
             d.Reason,
-            l.LossDesc,
+            l.LossName,
             d.SubLossID,
-            sl.SubLossDesc,
+            sl.SubLossName,
             c.LineID, 
             c.LineName
         FROM PPMS_Solution.dbo.Perf_Downtime d
@@ -103,30 +103,30 @@ router.get("/downtime/details/LineName", (request, response) => {
 });
 
 
-// Update downtime details: Reason, LossDesc, SubLossDesc
+// Update downtime details: Reason, LossName, SubLossName
 router.put("/downtime/update", async (request, response) => {
     try {
-        const { DowntimeID, LossDesc, SubLossDesc, Reason } = request.body;
+        const { DowntimeID, LossName, SubLossName, Reason } = request.body;
 
-        if (!DowntimeID || !LossDesc || !SubLossDesc || !Reason) {
-            return middlewares.standardResponse(response, null, 400, "DowntimeID, LossDesc, SubLossDesc, and Reason are required");
+        if (!DowntimeID || !LossName || !SubLossName || !Reason) {
+            return middlewares.standardResponse(response, null, 400, "DowntimeID, LossName, SubLossName, and Reason are required");
         }
 
         const sqlRequest = new sqlConnection.sql.Request();
 
         // Get LossID dynamically
-        sqlRequest.input("LossDesc", sqlConnection.sql.VarChar, LossDesc);
-        const lossQuery = await sqlRequest.query(`SELECT LossID FROM PPMS_Solution.dbo.Config_LossCategory WHERE LossDesc = @LossDesc`);
+        sqlRequest.input("LossName", sqlConnection.sql.VarChar, LossName);
+        const lossQuery = await sqlRequest.query(`SELECT LossID FROM PPMS_Solution.dbo.Config_LossCategory WHERE LossName = @LossName`);
         if (lossQuery.recordset.length === 0) {
-            return middlewares.standardResponse(response, null, 404, "LossDesc not found in Config_LossCategory");
+            return middlewares.standardResponse(response, null, 404, "LossName not found in Config_LossCategory");
         }
         const LossID = lossQuery.recordset[0].LossID;
 
         // Get SubLossID dynamically
-        sqlRequest.input("SubLossDesc", sqlConnection.sql.VarChar, SubLossDesc);
-        const subLossQuery = await sqlRequest.query(`SELECT SubLossID FROM PPMS_Solution.dbo.Config_SubLossCategory WHERE SubLossDesc = @SubLossDesc`);
+        sqlRequest.input("SubLossName", sqlConnection.sql.VarChar, SubLossName);
+        const subLossQuery = await sqlRequest.query(`SELECT SubLossID FROM PPMS_Solution.dbo.Config_SubLossCategory WHERE SubLossName = @SubLossName`);
         if (subLossQuery.recordset.length === 0) {
-            return middlewares.standardResponse(response, null, 404, "SubLossDesc not found in Config_SubLossCategory");
+            return middlewares.standardResponse(response, null, 404, "SubLossName not found in Config_SubLossCategory");
         }
         const SubLossID = subLossQuery.recordset[0].SubLossID;
 
