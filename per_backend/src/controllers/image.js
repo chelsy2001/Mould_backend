@@ -22,12 +22,12 @@ router.post("/upload-image/:mouldID", upload.single("image"), async (req, res) =
     const pool = await sqlConnection.sql.connect();
     const request = pool.request();
 
-    request.input("imageData", sqlConnection.sql.VarBinary(sqlConnection.sql.MAX), file.buffer);
+    request.input("Image", sqlConnection.sql.VarBinary(sqlConnection.sql.MAX), file.buffer);
     request.input("mouldID", sqlConnection.sql.NVarChar, mouldID);
 
     await request.query(`
-      UPDATE Config_Mould 
-      SET MouldImage = @imageData, LastUpdatedTime = GETDATE()
+      UPDATE [PPMS_Solution].[dbo].[Mould_Images] 
+      SET MouldImage = @Image, Timestamp = GETDATE()
       WHERE MouldID = @mouldID
     `);
 
