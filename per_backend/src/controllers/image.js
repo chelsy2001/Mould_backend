@@ -26,8 +26,8 @@ router.post("/upload-image/:mouldID", upload.single("image"), async (req, res) =
     request.input("mouldID", sqlConnection.sql.NVarChar, mouldID);
 
     await request.query(`
-      UPDATE [PPMS_Solution].[dbo].[Mould_Images] 
-      SET MouldImage = @Image, Timestamp = GETDATE()
+      UPDATE Mould_Images 
+      SET Image = @Image, Timestamp = GETDATE()
       WHERE MouldID = @mouldID
     `);
 

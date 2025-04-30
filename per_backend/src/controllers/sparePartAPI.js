@@ -48,7 +48,7 @@ WHERE
 router.post("/movement", (request, response) => {
   new sqlConnection.sql.Request().query(
     `UPDATE Mould_SparePartMonitoring SET CurrentQuantity = CurrentQuantity -  ${request.body.Quantity}, LastUpdatedTime = GETDATE() WHERE SparePartID  = ${request.body.SparePartID}
-    Insert Into [PPMS_Solution].[dbo].[SparePartGenealogy] ([MouldID],[SparePartID],[CurrentQuantity],[Remark],[Timestamp]) Values (\'${request.body.MouldID}\',${request.body.SparePartID},(SELECT TOP(1) CurrentQuantity FROM Mould_SparePartMonitoring WHERE SparePartID  = ${request.body.SparePartID}),'',GETDATE())
+    Insert Into [PPMS_Solution].[dbo].[Mould_SparePartGenealogy] ([MouldID],[SparePartID],[CurrentQuantity],[Remark],[Timestamp]) Values (\'${request.body.MouldID}\',${request.body.SparePartID},(SELECT TOP(1) CurrentQuantity FROM Mould_SparePartMonitoring WHERE SparePartID  = ${request.body.SparePartID}),'',GETDATE())
     `,
     (err, result) => {
       if (err) {
