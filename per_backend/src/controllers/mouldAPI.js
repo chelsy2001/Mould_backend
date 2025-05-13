@@ -20,7 +20,6 @@ router.get("/details/:EquipmentTypeID/:mould", (request, response) => {
     MM.MouldPMStatus,
     MM.MouldLifeStatus,
     MM.MouldStatus,
-    PE.MouldImage,
     PE.ProductGroupID,
     PG.ProductGroupName
 FROM 
@@ -270,57 +269,6 @@ router.post("/users", (request, response) => {
   );
 });
 
-// router.post("/addbreakdownlog", async (request, response) => {
-//   try {
-//     const sqlRequest = new sqlConnection.sql.Request();
-
-//     // Insert into Mould_BreakDownLog
-//     await sqlRequest.query(`
-//       SET ANSI_WARNINGS OFF;
-//       INSERT INTO Mould_BreakDownLog 
-// VALUES ('${request.body.MouldID}', '${request.body.BDStartTime}', '${request.body.BDEndTime}', ${request.body.BDDuration}, 
-//         ${request.body.TotalBDCount}, '${request.body.UserID}', '${request.body.BDReason}', '${request.body.BDRemark}', 
-//         ${request.body.BDStatus}, GETDATE());
-//     `);
-//     console.log("Inserted into Mould_BreakDownLog");
-
-//     // Update Mould_Monitoring
-//     await sqlRequest.query(`
-//       SET ANSI_WARNINGS OFF;
-//       UPDATE Mould_Monitoring 
-//       SET MouldStatus = ${request.body.MouldStatus}, MouldLifeStatus = '${request.body.MouldLifeStatus}', 
-//           LastUpdatedTime = GETDATE()
-//       WHERE EquipmentTypeID = '${request.body.EquipmentTypeID}' AND MouldID = '${request.body.MouldID}';
-//     `);
-//     console.log("Updated Mould_Monitoring");
-
-//     // Insert into Mould_Genealogy
-//     await sqlRequest.query(`
-//       SET ANSI_WARNINGS OFF;
-//       INSERT INTO Mould_Genealogy 
-//       VALUES ('${request.body.MouldID}', ${request.body.CurrentMouldLife}, ${request.body.ParameterID}, 
-//               ${request.body.ParameterValue}, GETDATE());
-//     `);
-//     console.log("Inserted into Mould_Genealogy");
-
-//     // Update CONFIG_MOULD
-//     await sqlRequest.query(`
-//       SET ANSI_WARNINGS OFF;
-//       UPDATE CONFIG_MOULD 
-//       SET MouldStatus = ${request.body.MouldStatus}, LastUpdatedTime = GETDATE()
-//       WHERE MouldID = '${request.body.MouldID}';
-//     `);
-//     console.log("Updated CONFIG_MOULD");
-
-//     // Send success response if all queries succeed
-//     middlewares.standardResponse(response, null, 200, "success");
-
-//   } catch (err) {
-//     // Send error response if any query fails
-//     middlewares.standardResponse(response, null, 300, "Error executing query: " + err);
-//     console.error("Error executing query:", err);
-//   }
-// });
 
 router.post("/addbreakdownlog", async (req, res) => {
   const {
@@ -338,20 +286,21 @@ router.post("/addbreakdownlog", async (req, res) => {
     EquipmentTypeID,
     CurrentMouldLife,
     ParameterID,
-    ParameterValue
+    ParameterValue,
+    LastUpdatedTime
   } = req.body;
 
   // Validate required fields
-  if (
-    !MouldID || !BDStartTime || !BDEndTime === undefined ||
-    BDDuration === undefined || TotalBDCount === undefined ||
-    !UserID || !BDReason || !BDRemark ||
-    BDStatus === undefined || MouldStatus === undefined ||
-    !MouldLifeStatus || EquipmentTypeID === undefined ||
-    CurrentMouldLife === undefined || ParameterID === undefined || ParameterValue === undefined
-  ) {
-    return ;
-  }
+  // if (
+  //   !MouldID || !BDStartTime || !BDEndTime === null ||
+  //   BDDuration === undefined || TotalBDCount === undefined ||
+  //   !UserID || !BDReason || !BDRemark ||
+  //   BDStatus === undefined || MouldStatus === undefined ||
+  //   !MouldLifeStatus || EquipmentTypeID === undefined ||
+  //   CurrentMouldLife === undefined || ParameterID === undefined || ParameterValue === undefined
+  // ) {
+  //   return ;
+  // }
   
 
   console.log("Request body:", req.body);
@@ -370,6 +319,8 @@ router.post("/addbreakdownlog", async (req, res) => {
       .input('BDReason', sqlConnection.sql.NVarChar, BDReason)
       .input('BDRemark', sqlConnection.sql.NVarChar, BDRemark)
       .input('BDStatus', sqlConnection.sql.Int, BDStatus)
+      .input('LastUpdatedTime', sqlConnection.sql.DateTime, LastUpdatedTime)
+
       .query(`
         SET ANSI_WARNINGS OFF;
         INSERT INTO Mould_BreakDownLog
@@ -382,12 +333,14 @@ router.post("/addbreakdownlog", async (req, res) => {
     await sqlRequest
       .input('MouldStatus', sqlConnection.sql.Int, MouldStatus)
       .input('MouldLifeStatus', sqlConnection.sql.NVarChar, MouldLifeStatus)
-      .input('EquipmentTypeID', sqlConnection.sql.Int, EquipmentTypeID)
+      .input('EquipmentTypeID', sqlConnection.sql.BigInt, EquipmentTypeID)
       .query(`
         SET ANSI_WARNINGS OFF;
         UPDATE Mould_Monitoring
-        SET MouldStatus = @MouldStatus, MouldLifeStatus = @MouldLifeStatus, LastUpdatedTime = GETDATE()
-        WHERE EquipmentTypeID = @EquipmentTypeID AND MouldID = @MouldID;
+SET MouldStatus = @MouldStatus,
+    MouldLifeStatus = @MouldLifeStatus,
+    LastUpdatedTime = GETDATE()
+WHERE EquipmentTypeID = @EquipmentTypeID AND MouldID = @MouldID;
       `);
     console.log("✅ Updated Mould_Monitoring");
 
@@ -399,7 +352,7 @@ router.post("/addbreakdownlog", async (req, res) => {
       .query(`
         SET ANSI_WARNINGS OFF;
         INSERT INTO Mould_Genealogy
-        (MouldID, CurrentMouldLife, ParameterID, ParameterValue, LastUpdatedTime)
+        (MouldID, CurrentMouldLife, ParameterID, ParameterValue, Timestamp)
         VALUES (@MouldID, @CurrentMouldLife, @ParameterID, @ParameterValue, GETDATE());
       `);
     console.log("✅ Inserted into Mould_Genealogy");
