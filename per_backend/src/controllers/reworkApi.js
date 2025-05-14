@@ -4,57 +4,47 @@ const middlewares = require("../middlewares/middlewares.js");
 
 const router = express.Router();
 
-//GET Line ID
-router.get("/Line", (request, response) => {
-  new sqlConnection.sql.Request().query(
-    `SELECT LineID, LineName FROM PPMS_Solution.dbo.Config_Line`,
-    (err, result) => {
-      if (err) {
-        middlewares.standardResponse(response, null, 300, "Error executing query: " + err);
-      } else {
-        middlewares.standardResponse(response, result.recordset, 200, "success");
-      }
-    }
-  );
-});
+
 
 // get rework details
-router.get("/rework/details/LineName", (request, response) => {
-    const { LineName } = request.query; // Get station name from query parameters
+// router.get("/rework/details/LineName", (request, response) => {
+//     const { LineName } = request.query; // Get station name from query parameters
 
-    if (!LineName) {
-        return middlewares.standardResponse(response, null, 400, "LineName is required");
-    }
+//     if (!LineName) {
+//         return middlewares.standardResponse(response, null, 400, "LineName is required");
+//     }
 
-    const sqlRequest = new sqlConnection.sql.Request();
-    sqlRequest.input("LineName", sqlConnection.sql.VarChar, LineName); // Bind the parameter
+//     const sqlRequest = new sqlConnection.sql.Request();
+//     sqlRequest.input("LineName", sqlConnection.sql.VarChar, LineName); // Bind the parameter
 
-    sqlRequest.query(
-        `SELECT
-           R.ReworkID, 
-           R.LineID,
-           R.ProdDate,
-           R.ProdShift,
-           R.SKUID,
-           R.ReworkStartTime,
-           R.ReworkEndTime,
-           R.ReworkStatus,
-           R.Reason,
-           l.LineName,
-           S.SKUName
-        FROM PPMS_Solution.dbo.Perf_Rework R
-         JOIN PPMS_Solution.dbo.Config_Line l ON R.LineID = l.LineID
-         JOIN PPMS_Solution.dbo.Config_SKU S ON R.SKUID = S.SKUID
-        WHERE  l.LineName=@LineName;`,
-        (err, result) => {
-            if (err) {
-                middlewares.standardResponse(response, null, 500, "Error executing query: " + err);
-            } else {
-                middlewares.standardResponse(response, result.recordset, 200, "Success");
-            }
-        }
-    );
-});
+//     sqlRequest.query(
+//         `SELECT
+//            R.ReworkID, 
+//            R.LineID,
+//            R.ProdDate,
+//            R.ProdShift,
+//            R.SKUID,
+//            R.ReworkStartTime,
+//            R.ReworkEndTime,
+//            R.ReworkStatus,
+//            R.Reason,
+//            l.LineName,
+//            S.SKUName
+//         FROM PPMS_Solution.dbo.Perf_Rework R
+//          JOIN PPMS_Solution.dbo.Config_Line l ON R.LineID = l.LineID
+//          JOIN PPMS_Solution.dbo.Config_SKU S ON R.SKUID = S.SKUID
+//         WHERE  l.LineName=@LineName;`,
+//         (err, result) => {
+//             if (err) {
+//                 middlewares.standardResponse(response, null, 500, "Error executing query: " + err);
+//             } else {
+//                 middlewares.standardResponse(response, result.recordset, 200, "Success");
+//             }
+//         }
+//     );
+// });
+
+//-------------------
 // router.get("/rework/details/LineName", (request, response) => {
 //     const { LineName } = request.query; // Get station name from query parameters
 
@@ -123,5 +113,78 @@ router.put("/rework/updateReason", (request, response) => {
     });
 });
 
+//API to fetch Role base action 
+router.get("/get-actions/:role", (request, response) => {
+    const role = request.params.role;
+  
+    const query = `
+      SELECT [Action]
+      FROM [PPMS_Solution].[dbo].[Rework_StatusReference]
+      WHERE [Role] = @role
+    `;
+  
+    const sqlRequest = new sqlConnection.sql.Request();
+    sqlRequest.input("role", sqlConnection.sql.VarChar, role);
+  
+    sqlRequest.query(query, (err, result) => {
+      if (err) {
+        middlewares.standardResponse(response, null, 300, "Error executing query: " + err);
+      } else {
+        middlewares.standardResponse(response, result.recordset, 200, "Success");
+      }
+    });
+  });
+  //gET THE REWORK geneology on the basis of lineid
+  router.get("/rework-genealogy/:lineID", (request, response) => {
+    const lineID = request.params.lineID;
+  
+    const query = `
+      SELECT 
+          RG.[UID],
+          RG.[Timestamp],
+          RG.[LineID],
+          CL.LineName,
+          RG.[User],
+          RG.[ProdDate],
+          RG.[ProdShift],
+          RG.[SKUID],
+          CS.SKUName,
+          RG.[Qty],
+          RG.[StatusID],
+          RG.[Reason],
+          RG.[Remark]
+      FROM 
+          [PPMS_Solution].[dbo].[Rework_Genealogy] AS RG
+      LEFT JOIN 
+          [PPMS_Solution].[dbo].[Config_Line] AS CL ON RG.LineID = CL.LineID
+      LEFT JOIN 
+          [PPMS_Solution].[dbo].[Config_SKU] AS CS ON RG.SKUID = CS.SKUID
+      WHERE 
+          RG.LineID = ${lineID}
+    `;
+  
+    new sqlConnection.sql.Request().query(query, (err, result) => {
+      if (err) {
+        middlewares.standardResponse(response, null, 300, "Error executing query: " + err);
+      } else {
+        middlewares.standardResponse(response, result.recordset, 200, "Success");
+      }
+    });
+  });
 
+  //get Rework reasons 
+  router.get("/ReworkReason", (request, response) => {
+      new sqlConnection.sql.Request().query(
+        `select * from [PPMS_Solution].[dbo].[Config_ReworkReason]`,
+        (err, result) => {
+          if (err) {
+            middlewares.standardResponse(response, null, 300, "Error executing query: " + err);
+          } else {
+            middlewares.standardResponse(response, result.recordset, 200, "success");
+          }
+        }
+      );
+    });
+  
+  
 module.exports = router;

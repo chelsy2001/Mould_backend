@@ -9,6 +9,7 @@ const sparePartRoute = require("./src/controllers/sparePartAPI.js");
 const downtimeRoute = require("./src/controllers/downTimeApi.js");
 const reworkRoute = require("./src/controllers/reworkApi.js");
 const OEE = require("./src/controllers/oee.js");
+const Common=require("./src/controllers/Common.js");
 const Image = require("./src/controllers/image.js")
 
 const limiter = rateLimit({
@@ -28,8 +29,10 @@ app.use("/api/pm", pmRoute);
 app.use("/api/hc", hcRoute);
 app.use("/api/sparepart", sparePartRoute);
 app.use("/api/downtime",downtimeRoute);
-app.use("/api/rework",reworkRoute)
+app.use("/api/rework",reworkRoute) 
 app.use("/api/OEE",OEE);
+app.use("/api/Common",Common);
+//app.use("/api/common",Common);
 app.use("/api/image",Image)
 
 

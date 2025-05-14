@@ -1,9 +1,9 @@
 const sql = require("mssql");
 
 const config = {
-  user: "sa",
-  password: "root",
-  server: "DESKTOP-T266BV5\\SQLEXPRESS",
+  user: "Admin",
+  password: "IAC@123",
+  server: "DESKTOP-URBGBGQ",
   database: "PPMS_Solution",
   options: {
     encrypt: false,
