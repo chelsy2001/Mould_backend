@@ -77,6 +77,22 @@ router.get("/ProdDate/Shift", (request, response) => {
       }
     );
   });
+//-----------------get the lineid by linename----
+  router.get("/getLineID/:LineName", (request, response) => {
+  const lineName = request.params.LineName;
+
+  new sqlConnection.sql.Request()
+    .input("LineName", sqlConnection.sql.VarChar, lineName)
+    .query("SELECT LineID FROM Config_Line WHERE LineName = @LineName", (err, result) => {
+      if (err) {
+        middlewares.standardResponse(response, null, 300, "Error fetching LineID: " + err);
+      } else if (result.recordset.length > 0) {
+        response.json({ LineID: result.recordset[0].LineID });
+      } else {
+        response.status(404).json({ message: "LineName not found" });
+      }
+    });
+});
 
 
 //Fetch the OEE Details based on lineid
