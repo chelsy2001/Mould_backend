@@ -311,8 +311,8 @@ router.post("/addbreakdownlog", async (req, res) => {
     // Insert into Mould_BreakDownLog
     await sqlRequest
       .input('MouldID', sqlConnection.sql.NVarChar, MouldID)
-      .input('BDStartTime', sqlConnection.sql.DateTime, BDStartTime)
-      .input('BDEndTime', sqlConnection.sql.DateTime, BDEndTime)
+      .input('BDStartTime', sqlConnection.sql.DateTimeOffset, BDStartTime)
+      .input('BDEndTime', sqlConnection.sql.DateTimeOffset, BDEndTime)
       .input('BDDuration', sqlConnection.sql.Int, BDDuration)
       .input('TotalBDCount', sqlConnection.sql.Int, TotalBDCount)
       .input('UserID', sqlConnection.sql.NVarChar, UserID)
