@@ -20,4 +20,4 @@ sql.connect(config, (err) => {
   }
 });
 
-module.exports = { sql };
+module.exports = { sql ,config};

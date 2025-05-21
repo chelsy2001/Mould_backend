@@ -35,9 +35,23 @@ router.get("/Shops", (request, response) => {
   });
 
 // Get all lines
+// router.get("/Lines", (request, response) => {
+//   new sqlConnection.sql.Request().query(
+//     `SELECT LineID, LineName FROM PPMS_Solution.dbo.Config_Line`,
+//     (err, result) => {
+//       if (err) {
+//         middlewares.standardResponse(response, null, 300, "Error executing query: " + err);
+//       } else {
+//         middlewares.standardResponse(response, result.recordset, 200, "success");
+//       }
+//     }
+//   );
+// });
 router.get("/Lines", (request, response) => {
+  const shopId = request.query.shopId;
+
   new sqlConnection.sql.Request().query(
-    `SELECT LineID, LineName FROM PPMS_Solution.dbo.Config_Line`,
+    `SELECT LineID, LineName FROM PPMS_Solution.dbo.Config_Line WHERE ShopID = ${shopId}`,
     (err, result) => {
       if (err) {
         middlewares.standardResponse(response, null, 300, "Error executing query: " + err);
