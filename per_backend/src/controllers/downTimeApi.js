@@ -6,19 +6,36 @@ const middlewares = require("../middlewares/middlewares.js");
 const router = express.Router();
 
 //get lossID 
-router.get("/loss", (request, response) => {
-    new sqlConnection.sql.Request().query(
-      `select LossID , LossName from [PPMS_Solution].[dbo].[Config_LossCategory]`,
-      (err, result) => {
-        if (err) {
-          middlewares.standardResponse(response, null, 300, "Error executing query: " + err);
-        } else {
-          middlewares.standardResponse(response, result.recordset, 200, "success");
-        }
-      }
-    );
-  });
+// router.get("/loss", (request, response) => {
+//     new sqlConnection.sql.Request().query(
+//       `select LossID , LossName from [PPMS_Solution].[dbo].[Config_LossCategory]`,
+//       (err, result) => {
+//         if (err) {
+//           middlewares.standardResponse(response, null, 300, "Error executing query: " + err);
+//         } else {
+//           middlewares.standardResponse(response, result.recordset, 200, "success");
+//         }
+//       }
+//     );
+//   });
 
+router.get("/loss", (request, response) => {
+  new sqlConnection.sql.Request().query(
+    `  SELECT distinct LossID, LossName FROM [PPMS_Solution].[dbo].[Config_LossCategory];  `,
+    (err, result) => {
+      if (err) {
+        middlewares.standardResponse(response, null, 300, "Error executing query: " + err);
+      } else {
+        const formattedData = result.recordset.map((row) => ({
+          key: row.LossID,
+          value: row.LossName
+        }));
+
+        middlewares.standardResponse(response, formattedData, 200, "success");
+      }
+    }
+  );
+});
   //Get all SubLoss
   router.get("/Subloss/LossName", (request, response) => {
     const { LossName } = request.query; 
