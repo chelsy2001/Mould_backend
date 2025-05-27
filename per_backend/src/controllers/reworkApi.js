@@ -85,34 +85,54 @@ const router = express.Router();
 // });
 
 //update rework details
-router.put("/rework/updateReason", (request, response) => {
-    const { ReworkID, LineName, Reason } = request.body;
+// POST: Update Count, Reason, and Remark using stored procedure
+router.post('/update-rework', async (request, response) => {
+  const { LineID, UserRole, Action, Count, Reason, Remark } = request.body;
 
-    if (!ReworkID || !LineName || !Reason) {
-        return middlewares.standardResponse(response, null, 400, "ReworkID, LineName, and Reason are required");
-    }
+  try {
+    const procRequest = new sqlConnection.sql.Request();
+    procRequest.input('LineID', sqlConnection.sql.Int, LineID);
+    procRequest.input('UserRole', sqlConnection.sql.NVarChar(50), UserRole);
+    procRequest.input('Action', sqlConnection.sql.NVarChar(50), Action);
+    procRequest.input('Count', sqlConnection.sql.Int, Count);
+    procRequest.input('Reason', sqlConnection.sql.NVarChar(255), Reason);
+    procRequest.input('Remark', sqlConnection.sql.NVarChar(sqlConnection.sql.MAX), Remark);
 
-    const sqlRequest = new sqlConnection.sql.Request();
+    await procRequest.execute('[PPMS_Solution].[dbo].[Insert_ReworkGenealogy]');
 
-    sqlRequest.input("LineName", sqlConnection.sql.VarChar, LineName);
-    sqlRequest.input("Reason", sqlConnection.sql.VarChar, Reason);
-    sqlRequest.input("ReworkID", sqlConnection.sql.Int, ReworkID);
-
-    sqlRequest.query(`
-        UPDATE PPMS_Solution.dbo.Perf_Rework
-        SET 
-            LineID = (SELECT LineID FROM PPMS_Solution.dbo.Config_Line WHERE LineName = @LineName),
-            Reason = @Reason
-        WHERE ReworkID = @ReworkID;
-    `, (err, result) => {
-        if (err) {
-            middlewares.standardResponse(response, null, 500, "Error executing update query: " + err);
-        } else {
-            middlewares.standardResponse(response, result.rowsAffected, 200, "Update successful");
-        }
-    });
+    return middlewares.standardResponse(response, null, 200, 'Rework genealogy updated successfully.');
+  } catch (err) {
+    console.error('Error executing update-rework:', err);
+    return middlewares.standardResponse(response, null, 500, 'Error updating rework genealogy: ' + err.message);
+  }
 });
 
+
+
+// GET Perf_CycleTime data by LineID
+router.get('/cycletime/:lineID', (request, response) => {
+  const lineID = request.params.lineID;
+
+  const query = `
+    SELECT top(1) pct.*
+    FROM [PPMS_Solution].[dbo].[Perf_CycleTime] pct
+    INNER JOIN [PPMS_Solution].[dbo].[Config_Station] cs ON pct.StationID = cs.StationID
+    INNER JOIN [PPMS_Solution].[dbo].[Config_Line] cl ON cs.LineID = cl.LineID
+    WHERE cl.LineID = @lineID
+    ORDER BY pct.Timestamp DESC
+  `;
+
+  const sqlRequest = new sqlConnection.sql.Request();
+  sqlRequest.input('lineID', sqlConnection.sql.Int, lineID);
+
+  sqlRequest.query(query, (err, result) => {
+    if (err) {
+      middlewares.standardResponse(response, null, 300, 'Error executing query: ' + err);
+    } else {
+      middlewares.standardResponse(response, result.recordset, 200, 'Success');
+    }
+  });
+});
 //API to fetch Role base action 
 router.get("/get-actions/:role", (request, response) => {
     const role = request.params.role;
