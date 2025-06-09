@@ -98,7 +98,7 @@ router.post('/update-rework', async (request, response) => {
     procRequest.input('Reason', sqlConnection.sql.NVarChar(255), Reason);
     procRequest.input('Remark', sqlConnection.sql.NVarChar(sqlConnection.sql.MAX), Remark);
 
-    await procRequest.execute('[PPMS_Solution].[dbo].[Insert_ReworkGenealogy]');
+    await procRequest.execute('[PPMS_Solution].[dbo].[Insert_ReworkGenealogy1]');
 
     return middlewares.standardResponse(response, null, 200, 'Rework genealogy updated successfully.');
   } catch (err) {
