@@ -12,6 +12,7 @@ const OEE = require("./src/controllers/oee.js");
 const Common=require("./src/controllers/Common.js");
 const Image = require("./src/controllers/image.js")
 const PMMouldMonitoring=require("./src/controllers/PMMouldMonitoring.js");
+const PMMouldPreparation=require("./src/controllers/PMMouldPreparation.js");
 const limiter = rateLimit({
   //set up transaction rate limiter
   windowMs: 15 * 60 * 1000,
@@ -33,6 +34,7 @@ app.use("/api/rework",reworkRoute)
 app.use("/api/OEE",OEE);
 app.use("/api/Common",Common);
 app.use("/api/PMMouldMonitoring",PMMouldMonitoring);
+app.use("/api/PMMouldPreparation",PMMouldPreparation);
 //app.use("/api/common",Common);
 app.use("/api/image",Image)
 
