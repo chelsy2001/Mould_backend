@@ -6,6 +6,8 @@ const mouldRoute = require("./src/controllers/mouldAPI.js");
 const pmRoute = require("./src/controllers/pmAPI.js");
 const hcRoute = require("./src/controllers/hcAPI.js");
 const sparePartRoute = require("./src/controllers/sparePartAPI.js");
+const PMMouldMonitoring = require("./src/controllers/PMMouldMonitoring.js");
+const HCMouldMonitoring = require("./src/controllers/HCMouldMonitoring.js");
 
 const limiter = rateLimit({
   //set up transaction rate limiter
@@ -23,6 +25,8 @@ app.use("/api/mould", mouldRoute);
 app.use("/api/pm", pmRoute);
 app.use("/api/hc", hcRoute);
 app.use("/api/sparepart", sparePartRoute);
+app.use("/api/PMMouldMonitoring",PMMouldMonitoring);
+app.use("/api/HCMouldMonitoring",HCMouldMonitoring);
 
 const PORT = process.env.PORT || 3000;
 
