@@ -14,7 +14,8 @@ const Image = require("./src/controllers/image.js")
 const PMMouldMonitoring=require("./src/controllers/PMMouldMonitoring.js");
 const PMMouldPreparation=require("./src/controllers/PMMouldPreparation.js")
 const PMMouldExecution=require("./src/controllers/PMMouldExecution.js")
-
+const HCMouldMonitoring = require("./src/controllers/HCMouldMonitoring.js");
+const HCMouldExecution = require("./src/controllers/HCMouldExecution.js");
 
 const limiter = rateLimit({
   //set up transaction rate limiter
@@ -39,6 +40,8 @@ app.use("/api/Common",Common);
 app.use("/api/PMMouldMonitoring",PMMouldMonitoring);
 app.use("/api/PMMouldPreparation",PMMouldPreparation);
 app.use("/api/PMMouldExecution",PMMouldExecution);
+app.use("/api/HCMouldMonitoring",HCMouldMonitoring);
+app.use("/api/HCMouldExecution",HCMouldExecution);
 //app.use("/api/common",Common);
 app.use("/api/image",Image)
 
