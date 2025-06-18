@@ -225,7 +225,7 @@ router.post('/SubmitPMChecklist', async (req, res) => {
     // 4. Update Config_PMSchedule PMStatus to 6
     await new sqlConnection.sql.Request()
       .query(`
-        UPDATE Config_PMSchedule 
+        UPDATE Config_Mould_PMSchedule
         SET PMStatus = 6 
       `);
 
