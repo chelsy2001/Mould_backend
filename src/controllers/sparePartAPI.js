@@ -61,7 +61,7 @@ router.get("/categories/:mouldid", (req, res) => {
   new sqlConnection.sql.Request().query(
     `SELECT DISTINCT spc.SparePartCategoryID, spc.SparePartCategoryName
      FROM Config_SparePartCategory spc
-     JOIN Config_SparePart sp ON sp.SpareCategoryID = spc.SparePartCategoryID
+     JOIN Config_SparePart sp ON sp.SparePartCategoryID = spc.SparePartCategoryID
      JOIN Config_Mould m ON m.MouldGroupID = sp.MouldGroupID
      WHERE m.MouldID = '${mouldid}'`,
     (err, result) => {
@@ -78,9 +78,26 @@ router.get("/categories/:mouldid", (req, res) => {
 router.get("/parts/by-category/:categoryid", (req, res) => {
   const { categoryid } = req.params;
   new sqlConnection.sql.Request().query(
-    `SELECT SparePartID, SparePartName
+    `SELECT SparePartID, SparePartName 
      FROM Config_SparePart
-     WHERE SpareCategoryID = ${categoryid}`,
+     WHERE SparePartCategoryID = ${categoryid}`,
+    (err, result) => {
+      if (err) {
+        middlewares.standardResponse(res, null, 300, "Query Error: " + err);
+      } else {
+        middlewares.standardResponse(res, result.recordset, 200, "Success");
+      }
+    }
+  );
+});
+
+// 2️⃣ Get Spare Part Names by SparePartCategoryID
+router.get("/parts/by-category-prefferd/:categoryid", (req, res) => {
+  const { categoryid } = req.params;
+  new sqlConnection.sql.Request().query(
+    `SELECT  SparePartName 
+     FROM Config_SparePart
+     WHERE SparePartCategoryID = ${categoryid} AND PreferredSparePart = 1`,
     (err, result) => {
       if (err) {
         middlewares.standardResponse(res, null, 300, "Query Error: " + err);
@@ -152,6 +169,24 @@ router.post("/movement", (request, response) => {
     }
   );
 });
+
+// 5️⃣ Get Current Quantity and Location by SparePartID
+router.get("/monitoring/:sparePartId", (req, res) => {
+  const { sparePartId } = req.params;
+  new sqlConnection.sql.Request().query(
+    `SELECT CurrentQuantity, SparePartLoc 
+     FROM Mould_SparePartMonitoring 
+     WHERE SparePartID = ${sparePartId}`,
+    (err, result) => {
+      if (err) {
+        middlewares.standardResponse(res, null, 300, "Query Error: " + err);
+      } else {
+        middlewares.standardResponse(res, result.recordset[0], 200, "Success");
+      }
+    }
+  );
+});
+
 
 
 module.exports = router;
