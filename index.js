@@ -10,6 +10,8 @@ const PMMouldMonitoring = require("./src/controllers/PMMouldMonitoring.js");
 const HCMouldMonitoring = require("./src/controllers/HCMouldMonitoring.js");
 const PMMouldPreparation = require("./src/controllers/PMMouldPreparation.js");
 const PMMouldExecution = require("./src/controllers/PMMouldExecution.js");
+const PMMouldApproval = require("./src/controllers/PMMouldApproval.js");
+const HCMouldApproval = require("./src/controllers/HCMouldApproval.js");
 const HCMouldExecution = require("./src/controllers/HCMouldExecution.js");
 
 const limiter = rateLimit({
@@ -33,7 +35,8 @@ app.use("/api/HCMouldMonitoring",HCMouldMonitoring);
 app.use("/api/PMMouldPreparation",PMMouldPreparation);
 app.use("/api/PMMouldExecution",PMMouldExecution)
 app.use("/api/HCMouldExecution",HCMouldExecution);
-
+app.use("/api/PMMouldApproval",PMMouldApproval);
+app.use("/api/HCMouldApproval",HCMouldApproval);
 const PORT = process.env.PORT || 3000;
 
 // Start the server on port 3000
