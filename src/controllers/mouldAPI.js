@@ -8,31 +8,31 @@ const router = express.Router();
 router.get("/details/:machine/:mould", (request, response) => {
   new sqlConnection.sql.Request().query(
     ` SELECT 
-    MM.MachineID,
-    MM.MouldID,
-    MM.MouldActualLife,
-    MM.HealthCheckThreshold,
-    MM.NextPMDue,
-    MM.PMWarning,
-    MM.HealthCheckDue,
-    MM.HealthCheckWarning,
-    MM.MouldHealthStatus,
-    MM.MouldPMStatus,
-    MM.MouldLifeStatus,
-    MM.MouldStatus,
-    PE.ProductGroupID,
-    PG.ProductGroupName
-FROM 
-    [dbo].[Mould_Monitoring] MM
-JOIN 
-    [dbo].[Config_Mould] PE ON MM.MouldID = PE.MouldID
-Join Config_ProductGroup PG ON PE.ProductGroupID = PG.ProductGroupID
-Where
-    MM.MachineID = '${request.params.machine}'
-AND 
-	MM.MouldID = '${request.params.mould}'
-ORDER BY 
-    MM.MouldID;
+      MMM.MachineID,
+      MMM.MouldID,
+      MM.MouldActualLife,
+      MM.HealthCheckThreshold,
+      MM.NextPMDue,
+      MM.PMWarning,
+      MM.HealthCheckDue,
+      MM.HealthCheckWarning,
+      MM.MouldHealthStatus,
+      MM.MouldPMStatus,
+      MM.MouldLifeStatus,
+      MM.MouldStatus,
+      MMM.ProductGroupID,
+      PG.ProductGroupName
+    FROM 
+      [PPMS].[dbo].[Mould_MachineMatrix] MMM
+    JOIN 
+      [PPMS].[dbo].[Mould_Monitoring] MM ON MMM.MouldID = MM.MouldID
+    JOIN 
+      [PPMS].[dbo].[Config_ProductGroup] PG ON MMM.ProductGroupID = PG.ProductGroupID
+    WHERE 
+      MMM.MachineID = '${MachineID}' AND
+      MMM.MouldID = '${mould}'
+    ORDER BY 
+      MMM.MouldID;
     `,
     (err, result) => {
       if (err) {

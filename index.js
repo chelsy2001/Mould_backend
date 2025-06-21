@@ -13,6 +13,8 @@ const PMMouldExecution = require("./src/controllers/PMMouldExecution.js");
 const PMMouldApproval = require("./src/controllers/PMMouldApproval.js");
 const HCMouldApproval = require("./src/controllers/HCMouldApproval.js");
 const HCMouldExecution = require("./src/controllers/HCMouldExecution.js");
+const SeperatePMApproval = require("./src/controllers/SeperatePMAproval.js");
+const SeperateHCApproval = require("./src/controllers/SeperateHCApproval.js");
 
 const limiter = rateLimit({
   //set up transaction rate limiter
@@ -37,6 +39,8 @@ app.use("/api/PMMouldExecution",PMMouldExecution)
 app.use("/api/HCMouldExecution",HCMouldExecution);
 app.use("/api/PMMouldApproval",PMMouldApproval);
 app.use("/api/HCMouldApproval",HCMouldApproval);
+app.use("/api/SeperatePMApproval",SeperatePMApproval);
+app.use("/api/SeperateHCApproval",SeperateHCApproval);
 const PORT = process.env.PORT || 3000;
 
 // Start the server on port 3000
