@@ -13,7 +13,7 @@ const PMMouldExecution = require("./src/controllers/PMMouldExecution.js");
 const PMMouldApproval = require("./src/controllers/PMMouldApproval.js");
 const HCMouldApproval = require("./src/controllers/HCMouldApproval.js");
 const HCMouldExecution = require("./src/controllers/HCMouldExecution.js");
-const SeperatePMApproval = require("./src/controllers/SeperatePMAproval.js");
+const SeperatePMApproval = require("./src/controllers/SeperatePMApproval.js");
 const SeperateHCApproval = require("./src/controllers/SeperateHCApproval.js");
 
 const limiter = rateLimit({
