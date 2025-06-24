@@ -29,8 +29,8 @@ router.get("/details/:machine/:mould", (request, response) => {
     JOIN 
       [PPMS].[dbo].[Config_ProductGroup] PG ON MMM.ProductGroupID = PG.ProductGroupID
     WHERE 
-      MMM.MachineID = '${MachineID}' AND
-      MMM.MouldID = '${mould}'
+      MMM.MachineID = '${request.params.machine}' AND
+      MMM.MouldID = '${request.params.mould}'
     ORDER BY 
       MMM.MouldID;
     `,
@@ -326,7 +326,7 @@ router.post("/addbreakdownlog", async (req, res) => {
 SET MouldStatus = @MouldStatus,
     MouldLifeStatus = @MouldLifeStatus,
     LastUpdatedTime = GETDATE()
-WHERE  = @MachineID AND MouldID = @MouldID;
+WHERE MachineID = @MachineID AND MouldID = @MouldID;
       `);
     console.log("✅ Updated Mould_Monitoring");
 
