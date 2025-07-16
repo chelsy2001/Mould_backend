@@ -15,6 +15,13 @@ const HCMouldApproval = require("./src/controllers/HCMouldApproval.js");
 const HCMouldExecution = require("./src/controllers/HCMouldExecution.js");
 const SeperatePMApproval = require("./src/controllers/SeperatePMApproval.js");
 const SeperateHCApproval = require("./src/controllers/SeperateHCApproval.js");
+
+const downtimeRoute = require("./src/controllers/downTimeApi.js");
+const reworkRoute = require("./src/controllers/reworkApi.js");
+const OEE = require("./src/controllers/oee.js");
+const Common=require("./src/controllers/Common.js");
+
+
 const Image = require("./src/controllers/imageApi.js");
 
 const limiter = rateLimit({
@@ -43,6 +50,12 @@ app.use("/api/HCMouldApproval",HCMouldApproval);
 app.use("/api/SeperatePMApproval",SeperatePMApproval);
 app.use("/api/SeperateHCApproval",SeperateHCApproval);
 app.use("/api/image",Image)
+
+app.use("/api/downtime",downtimeRoute);
+app.use("/api/rework",reworkRoute) 
+app.use("/api/OEE",OEE);
+app.use("/api/Common",Common);
+
 const PORT = process.env.PORT || 3000;
 
 // Start the server on port 3000
