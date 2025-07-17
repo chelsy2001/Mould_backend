@@ -35,11 +35,11 @@ router.get("/Shops", (request, response) => {
   });
 
 
-router.get("/Lines", (request, response) => {
+router.get("/Machine", (request, response) => {
   const shopId = request.query.shopId;
 
   new sqlConnection.sql.Request().query(
-    `SELECT LineID, LineName FROM PPMS.dbo.Config_Line WHERE ShopID = ${shopId}`,
+    `SELECT MachineID, MachineName FROM PPMS.dbo.Config_Machine WHERE ShopID = ${shopId}`,
     (err, result) => {
       if (err) {
         middlewares.standardResponse(response, null, 300, "Error executing query: " + err);
