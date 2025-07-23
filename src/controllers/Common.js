@@ -36,10 +36,42 @@ router.get("/Shops", (request, response) => {
 
 
 router.get("/Machine", (request, response) => {
-  const shopId = request.query.shopId;
+  const StationID = request.query.StationID;
 
   new sqlConnection.sql.Request().query(
-    `SELECT MachineID, MachineName FROM PPMS.dbo.Config_Machine WHERE ShopID = ${shopId}`,
+    `SELECT MachineID, MachineName FROM PPMS.dbo.Config_Machine WHERE StationID = ${StationID}`,
+    (err, result) => {
+      if (err) {
+        middlewares.standardResponse(response, null, 300, "Error executing query: " + err);
+      } else {
+        middlewares.standardResponse(response, result.recordset, 200, "success");
+      }
+    }
+  );
+});
+
+// Get all Zones 
+router.get("/Zone", (request, response) => {
+  const ShopID = request.query.ShopID;
+
+  new sqlConnection.sql.Request().query(
+    `SELECT ZoneID, ZoneName FROM PPMS.dbo.[Config_Zone] WHERE ShopID = ${ShopID}`,
+    (err, result) => {
+      if (err) {
+        middlewares.standardResponse(response, null, 300, "Error executing query: " + err);
+      } else {
+        middlewares.standardResponse(response, result.recordset, 200, "success");
+      }
+    }
+  );
+});
+
+// Get all Stations 
+router.get("/Station", (request, response) => {
+  const ZoneID = request.query.ZoneID;
+
+  new sqlConnection.sql.Request().query(
+    `SELECT StationID, StationName FROM PPMS.dbo.Config_Station WHERE ZoneID = ${ZoneID}`,
     (err, result) => {
       if (err) {
         middlewares.standardResponse(response, null, 300, "Error executing query: " + err);
