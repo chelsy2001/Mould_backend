@@ -7,7 +7,7 @@ const router = express.Router();
 // Get all Plant
 router.get("/Plants", (request, response) => {
   new sqlConnection.sql.Request().query(
-    `SELECT PlantID, PlantName FROM PPMS.dbo.Config_Plant `,
+    `SELECT PlantID, PlantName FROM Config_Plant `,
     (err, result) => {
       if (err) {
         middlewares.standardResponse(response, null, 300, "Error executing query: " + err);
@@ -23,7 +23,7 @@ router.get("/Plants", (request, response) => {
 // Get all shops
 router.get("/Shops", (request, response) => {
     new sqlConnection.sql.Request().query(
-      `SELECT ShopID, ShopName FROM PPMS.dbo.Config_Shop`,
+      `SELECT ShopID, ShopName FROM Config_Shop`,
       (err, result) => {
         if (err) {
           middlewares.standardResponse(response, null, 300, "Error executing query: " + err);
@@ -35,11 +35,11 @@ router.get("/Shops", (request, response) => {
   });
 
 
-router.get("/Machine", (request, response) => {
+router.get("/Equipment", (request, response) => {
   const StationID = request.query.StationID;
 
   new sqlConnection.sql.Request().query(
-    `SELECT MachineID, MachineName FROM PPMS.dbo.Config_Machine WHERE StationID = ${StationID}`,
+    `SELECT EquipmentID, EquipmentName FROM Config_Equipment WHERE StationID = ${StationID}`,
     (err, result) => {
       if (err) {
         middlewares.standardResponse(response, null, 300, "Error executing query: " + err);
@@ -55,7 +55,7 @@ router.get("/Zone", (request, response) => {
   const ShopID = request.query.ShopID;
 
   new sqlConnection.sql.Request().query(
-    `SELECT ZoneID, ZoneName FROM PPMS.dbo.[Config_Zone] WHERE ShopID = ${ShopID}`,
+    `SELECT ZoneID, ZoneName FROM [Config_Zone] WHERE ShopID = ${ShopID}`,
     (err, result) => {
       if (err) {
         middlewares.standardResponse(response, null, 300, "Error executing query: " + err);
@@ -71,7 +71,7 @@ router.get("/Station", (request, response) => {
   const ZoneID = request.query.ZoneID;
 
   new sqlConnection.sql.Request().query(
-    `SELECT StationID, StationName FROM PPMS.dbo.Config_Station WHERE ZoneID = ${ZoneID}`,
+    `SELECT StationID, StationName FROM Config_Station WHERE ZoneID = ${ZoneID}`,
     (err, result) => {
       if (err) {
         middlewares.standardResponse(response, null, 300, "Error executing query: " + err);
@@ -89,7 +89,7 @@ router.get("/PMWarning", (request, response) => {
     MouldID,
     PMStatus
 FROM 
-    [PPMS].[dbo].[Config_Mould_PMSchedule]
+    [Config_Mould_PMSchedule]
 WHERE 
     PMStatus = 2
 `,

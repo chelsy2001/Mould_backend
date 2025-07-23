@@ -8,7 +8,7 @@ const router = express.Router();
 //get lossID 
 router.get("/loss", (request, response) => {
     new sqlConnection.sql.Request().query(
-      `select LossID , LossName from [PPMS].[dbo].[Config_LossCategory]`,
+      `select LossID , LossName from [Config_LossCategory]`,
       (err, result) => {
         if (err) {
           middlewares.standardResponse(response, null, 300, "Error executing query: " + err);
@@ -29,8 +29,8 @@ router.get("/loss", (request, response) => {
     const sqlRequest = new sqlConnection.sql.Request();
     sqlRequest.input("LossName", sqlConnection.sql.VarChar, LossName);
     sqlRequest.query(
-      `select s.SubLossID , s.SubLossName , l.LossName , l.LossID from [PPMS].[dbo].[Config_SubLossCategory] s
-      JOIN PPMS.dbo.Config_LossCategory l ON s.LossID = l.LossID
+      `select s.SubLossID , s.SubLossName , l.LossName , l.LossID from [Config_SubLossCategory] s
+      JOIN Config_LossCategory l ON s.LossID = l.LossID
       `,
       (err, result) => {
         if (err) {
@@ -45,7 +45,7 @@ router.get("/loss", (request, response) => {
 // Get all lines
 router.get("/Lines", (request, response) => {
   new sqlConnection.sql.Request().query(
-    `SELECT LineID, LineName FROM PPMS.dbo.Config_Line`,
+    `SELECT LineID, LineName FROM Config_Line`,
     (err, result) => {
       if (err) {
         middlewares.standardResponse(response, null, 300, "Error executing query: " + err);
@@ -58,12 +58,57 @@ router.get("/Lines", (request, response) => {
 
 
 // GET downtime details based on LineName
+// router.get("/downtime/details/LineName", (request, response) => {
+//     const { LineName } = request.query; // Get LineName from query parameters
+
+//     if (!LineName) {
+//         return middlewares.standardResponse(response, null, 400, "LineName is required");
+//     }
+
+//     const sqlRequest = new sqlConnection.sql.Request();
+//     sqlRequest.input("LineName", sqlConnection.sql.VarChar, LineName); // Bind the parameter
+
+//     sqlRequest.query(
+//         `SELECT 
+//             d.DowntimeID,
+//             d.StationID,
+//             s.StationName,
+//             d.ProdDate,
+//             d.ProdShift,
+//             d.StartTime,
+//             d.EndTime,
+//             d.SystemDownTime,
+//             d.PLCDownTime,
+//             d.LossID,
+//             d.Reason,
+//             l.LossName,
+//             d.SubLossID,
+//             sl.SubLossName,
+//             c.LineID, 
+//             c.LineName
+//         FROM PPMS.dbo.Perf_Downtime d
+//         JOIN PPMS.dbo.Config_Station s ON d.StationID = s.StationID
+//         JOIN PPMS.dbo.Config_Line c ON s.LineID = c.LineID
+//         LEFT JOIN PPMS.dbo.Config_LossCategory l ON d.LossID = l.LossID
+//         LEFT JOIN PPMS.dbo.Config_SubLossCategory sl ON d.SubLossID = sl.SubLossID
+//         WHERE c.LineName = @LineName;`,
+//         (err, result) => {
+//             if (err) {
+//                 console.error("Query Error:", err);
+//                 return middlewares.standardResponse(response, null, 500, "Error executing query: " + err);
+//             }
+//             middlewares.standardResponse(response, result.recordset, 200, "Success");
+//         }
+//     );
+// });
+
+
 router.get("/downtime/details/LineName", (request, response) => {
     const { LineName } = request.query; // Get LineName from query parameters
 
-    if (!LineName) {
-        return middlewares.standardResponse(response, null, 400, "LineName is required");
-    }
+    // if (!LineName) {
+    //     return middlewares.standardResponse(response, null, 400, "LineName is required");
+    // }
 
     const sqlRequest = new sqlConnection.sql.Request();
     sqlRequest.input("LineName", sqlConnection.sql.VarChar, LineName); // Bind the parameter
@@ -72,7 +117,7 @@ router.get("/downtime/details/LineName", (request, response) => {
         `SELECT 
             d.DowntimeID,
             d.StationID,
-            s.StationName,
+       
             d.ProdDate,
             d.ProdShift,
             d.StartTime,
@@ -83,15 +128,11 @@ router.get("/downtime/details/LineName", (request, response) => {
             d.Reason,
             l.LossName,
             d.SubLossID,
-            sl.SubLossName,
-            c.LineID, 
-            c.LineName
-        FROM PPMS.dbo.Perf_Downtime d
-        JOIN PPMS.dbo.Config_Station s ON d.StationID = s.StationID
-        JOIN PPMS.dbo.Config_Line c ON s.LineID = c.LineID
+            sl.SubLossName
+        FROM Perf_Downtime d
         LEFT JOIN PPMS.dbo.Config_LossCategory l ON d.LossID = l.LossID
         LEFT JOIN PPMS.dbo.Config_SubLossCategory sl ON d.SubLossID = sl.SubLossID
-        WHERE c.LineName = @LineName;`,
+       ;`,
         (err, result) => {
             if (err) {
                 console.error("Query Error:", err);
@@ -101,7 +142,6 @@ router.get("/downtime/details/LineName", (request, response) => {
         }
     );
 });
-
 
 // Update downtime details: Reason, LossName, SubLossName
 router.put("/downtime/update", async (request, response) => {
@@ -116,7 +156,7 @@ router.put("/downtime/update", async (request, response) => {
 
         // Get LossID dynamically
         sqlRequest.input("LossName", sqlConnection.sql.VarChar, LossName);
-        const lossQuery = await sqlRequest.query(`SELECT LossID FROM PPMS.dbo.Config_LossCategory WHERE LossName = @LossName`);
+        const lossQuery = await sqlRequest.query(`SELECT LossID FROM Config_LossCategory WHERE LossName = @LossName`);
         if (lossQuery.recordset.length === 0) {
             return middlewares.standardResponse(response, null, 404, "LossName not found in Config_LossCategory");
         }
@@ -124,7 +164,7 @@ router.put("/downtime/update", async (request, response) => {
 
         // Get SubLossID dynamically
         sqlRequest.input("SubLossName", sqlConnection.sql.VarChar, SubLossName);
-        const subLossQuery = await sqlRequest.query(`SELECT SubLossID FROM PPMS.dbo.Config_SubLossCategory WHERE SubLossName = @SubLossName`);
+        const subLossQuery = await sqlRequest.query(`SELECT SubLossID FROM Config_SubLossCategory WHERE SubLossName = @SubLossName`);
         if (subLossQuery.recordset.length === 0) {
             return middlewares.standardResponse(response, null, 404, "SubLossName not found in Config_SubLossCategory");
         }
@@ -137,7 +177,7 @@ router.put("/downtime/update", async (request, response) => {
         sqlRequest.input("Reason", sqlConnection.sql.VarChar, Reason);
 
         const updateQuery = `
-            UPDATE PPMS.dbo.Perf_Downtime 
+            UPDATE Perf_Downtime 
             SET 
                 LossID = @LossID, 
                 SubLossID = @SubLossID, 
@@ -173,9 +213,9 @@ router.get("/downtime/trend/LineName", (req, res) => {
       DATEPART(HOUR, o.[Timestamp]) AS Hour,
       c.LineName
     FROM 
-      [PPMS].[dbo].[Perf_CycleTime] o 
-    JOIN PPMS.dbo.Config_Station s ON o.StationID = s.StationID
-    JOIN PPMS.dbo.Config_Line c ON s.LineID = c.LineID
+      [Perf_CycleTime] o 
+    JOIN Config_Station s ON o.StationID = s.StationID
+    JOIN Config_Line c ON s.LineID = c.LineID
     WHERE 
       c.LineName = @LineName
       AND CAST(o.ProdDate AS DATE) = @ProdDate
