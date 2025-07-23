@@ -32,9 +32,9 @@ router.get('/GetExecuteCheckPoints/:CheckListID', (request, response) => {
     p.[LastUpdatedTime],
     c.[CheckListName]
 FROM 
-    [PPMS].[dbo].[Mould_Execute_PMCheckPoint] p
+    Mould_Execute_PMCheckPoint p
 JOIN 
-    [PPMS].[dbo].[Config_PMCheckList] c
+    Config_Mould_PMCheckList] c
     ON p.CheckListID = c.CheckListID
 WHERE 
     p.CheckListID = @CheckListID  AND 
@@ -64,7 +64,7 @@ router.post('/ExecuteUpdateCheckPointStatus', async (req, res) => {
 
   try {
     const query = `
-      UPDATE [PPMS].[dbo].[Mould_Execute_PMCheckPoint]
+      UPDATE Mould_Execute_PMCheckPoint
       SET 
         Observation = @Observation,
         OKNOK = @OKNOK,
@@ -225,7 +225,7 @@ router.post('/SubmitPMChecklist', async (req, res) => {
     // 4. Update Config_PMSchedule PMStatus to 6
     await new sqlConnection.sql.Request()
       .query(`
-        UPDATE Config_PMSchedule
+        UPDATE Config_Mould_PMSchedule
         SET PMStatus = 6 
       `);
 

@@ -14,7 +14,7 @@ router.get("/HCChecklist", (request, response) => {
     sch.UID,
     sch.CheckListID,
     chk.CheckListName,
-    sch.MachineID,
+    sch.EquipmentID,
     sch.MouldID,
     mould.MouldName,
     sch.HCFreqCount,
@@ -27,12 +27,12 @@ router.get("/HCChecklist", (request, response) => {
     sch.LastUpdatedTime,
     sch.LastUpdatedBy
 FROM 
-    PPMS.dbo.Config_HCSchedule AS sch
+    Config_Mould_HCSchedule AS sch
 LEFT JOIN 
-    PPMS.dbo.Config_HCCheckList AS chk
+    Config_Mould_HCCheckList AS chk
     ON sch.CheckListID = chk.CheckListID
 LEFT JOIN 
-    PPMS.dbo.Config_Mould AS mould
+    Config_Mould AS mould
     ON sch.MouldID = mould.MouldID
     ORDER BY 
     CASE 

@@ -8,7 +8,7 @@ const router = express.Router();
 router.get("/details/:machine/:mould", (request, response) => {
   new sqlConnection.sql.Request().query(
     ` SELECT 
-      MMM.MachineID,
+      MMM.EquipmentID,
       MMM.MouldID,
       MM.MouldActualLife,
       MM.HealthCheckThreshold,
@@ -23,13 +23,13 @@ router.get("/details/:machine/:mould", (request, response) => {
       MMM.ProductGroupID,
       PG.ProductGroupName
     FROM 
-      [PPMS].[dbo].[Mould_MachineMatrix] MMM
+      Mould_MachineMatrix MMM
     JOIN 
-      [PPMS].[dbo].[Mould_Monitoring] MM ON MMM.MouldID = MM.MouldID
+      Mould_Monitoring MM ON MMM.MouldID = MM.MouldID
     JOIN 
-      [PPMS].[dbo].[Config_ProductGroup] PG ON MMM.ProductGroupID = PG.ProductGroupID
+      Config_MouldProductGroup PG ON MMM.ProductGroupID = PG.ProductGroupID
     WHERE 
-      MMM.MachineID = '${request.params.machine}' AND
+      MMM.EquipmentID = '${request.params.machine}' AND
       MMM.MouldID = '${request.params.mould}'
     ORDER BY 
       MMM.MouldID;
@@ -61,7 +61,7 @@ router.post("/update", (request, response) => {
   new sqlConnection.sql.Request().query(
     `UPDATE Mould_Monitoring SET MouldStatus = ${request.body.MouldStatus}, MouldLifeStatus =\'${request.body.MouldLifeStatus}\',
     LastUpdatedTime = GETDATE()
-    WHERE MachineID =  \'${request.body.MachineID}\' AND MouldID = \'${request.body.MouldID}\';
+    WHERE EquipmentID =  \'${request.body.EquipmentID}\' AND MouldID = \'${request.body.MouldID}\';
  
     INSERT INTO Mould_Genealogy VALUES (\'${request.body.MouldID}\',${request.body.CurrentMouldLife},${request.body.ParameterID},${request.body.ParameterValue},GETDATE());
 
@@ -94,7 +94,7 @@ router.post("/update", (request, response) => {
 router.post("/load", (request, response) => {
   console.log(moment().format("yyyy-MM-DD"));
   new sqlConnection.sql.Request().query(
-    `SELECT Count(1) AS temp FROM [PPMS].[dbo].[Mould_Monitoring] where MachineID = \'${request.body.MachineID}\' and MouldID = \'${request.body.MouldID}\'`,
+    `SELECT Count(1) AS temp FROM Mould_Monitoring where EquipmentID = \'${request.body.EquipmentID}\' and MouldID = \'${request.body.MouldID}\'`,
     (err, result) => {
       if (err) {
         middlewares.standardResponse(
@@ -108,7 +108,7 @@ router.post("/load", (request, response) => {
         if (parseInt(result.recordset[0].temp) > 0) {
           new sqlConnection.sql.Request().query(
             `UPDATE Mould_Monitoring SET MouldStatus = ${request.body.MouldStatus}, LastUpdatedTime = GETDATE()
-            WHERE MachineID = \'${request.body.MachineID}\' AND MouldID = \'${request.body.MouldID}\';
+            WHERE EquipmentID = \'${request.body.EquipmentID}\' AND MouldID = \'${request.body.MouldID}\';
 
             INSERT INTO Mould_Genealogy VALUES (\'${request.body.MouldID}\',${request.body.CurrentMouldLife},${request.body.ParameterID},${request.body.ParameterValue},GETDATE());
 
@@ -136,9 +136,9 @@ router.post("/load", (request, response) => {
           );
         } else {
           new sqlConnection.sql.Request().query(
-            `INSERT INTO [Mould_Monitoring] VALUES (\'${request.body.MachineID}\',\'${request.body.MouldID}\',${request.body.MouldActualLife},${request.body.HealthCheckThreshold},${request.body.NextPMDue},${request.body.PMWarning},NULL,NULL,${request.body.HealthCheckDue},${request.body.HealthCheckWarning},NULL,NULL,${request.body.MouldLifeStatus},${request.body.MouldPMStatus},${request.body.MouldHealthStatus},${request.body.MouldStatus},GETDATE());
+            `INSERT INTO Mould_Monitoring VALUES (\'${request.body.EquipmentID}\',\'${request.body.MouldID}\',${request.body.MouldActualLife},${request.body.HealthCheckThreshold},${request.body.NextPMDue},${request.body.PMWarning},NULL,NULL,${request.body.HealthCheckDue},${request.body.HealthCheckWarning},NULL,NULL,${request.body.MouldLifeStatus},${request.body.MouldPMStatus},${request.body.MouldHealthStatus},${request.body.MouldStatus},GETDATE());
             
-            INSERT INTO Mould_MachineLog VALUES (\'${request.body.MouldID}\',\'${request.body.MachineID}\',${request.body.MouldStatus},GETDATE());
+            INSERT INTO Mould_EquipmentLog VALUES (\'${request.body.MouldID}\',\'${request.body.EquipmentID}\',${request.body.MouldStatus},GETDATE());
 
             INSERT INTO Mould_Genealogy VALUES (\'${request.body.MouldID}\',${request.body.CurrentMouldLife},${request.body.ParameterID},${request.body.ParameterValue},GETDATE());
             
@@ -205,7 +205,7 @@ router.get("/details/:mouldid", (request, response) => {
     CM.MouldHCThreshold,
     CM.MouldStorageLoc,
     MM.MouldStatus,
-    MM.MachineID,
+    MM.EquipmentID,
     MM.MouldActualLife,
     MM.HealthCheckThreshold,
     MM.NextPMDue,
@@ -282,7 +282,7 @@ router.post("/addbreakdownlog", async (req, res) => {
     BDStatus,
     MouldStatus,
     MouldLifeStatus,
-    MachineID,
+    EquipmentID,
     CurrentMouldLife,
     ParameterID,
     ParameterValue,
@@ -319,14 +319,14 @@ router.post("/addbreakdownlog", async (req, res) => {
     await sqlRequest
       .input('MouldStatus', sqlConnection.sql.Int, MouldStatus)
       .input('MouldLifeStatus', sqlConnection.sql.NVarChar, MouldLifeStatus)
-      .input('MachineID', sqlConnection.sql.BigInt, MachineID)
+      .input('EquipmentID', sqlConnection.sql.BigInt, EquipmentID)
       .query(`
         SET ANSI_WARNINGS OFF;
         UPDATE Mould_Monitoring
 SET MouldStatus = @MouldStatus,
     MouldLifeStatus = @MouldLifeStatus,
     LastUpdatedTime = GETDATE()
-WHERE MachineID = @MachineID AND MouldID = @MouldID;
+WHERE EquipmentID = @EquipmentID AND MouldID = @MouldID;
       `);
     console.log("✅ Updated Mould_Monitoring");
 

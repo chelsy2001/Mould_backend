@@ -61,7 +61,7 @@ router.get("/categories/:mouldid", (req, res) => {
   new sqlConnection.sql.Request().query(
     `SELECT DISTINCT spc.SparePartCategoryID, spc.SparePartCategoryName
      FROM Config_SparePartCategory spc
-     JOIN Config_SparePart sp ON sp.SparePartCategoryID = spc.SparePartCategoryID
+     JOIN Config_Mould_SparePart sp ON sp.SparePartCategoryID = spc.SparePartCategoryID
      JOIN Config_Mould m ON m.MouldGroupID = sp.MouldGroupID
      WHERE m.MouldID = '${mouldid}'`,
     (err, result) => {
@@ -79,7 +79,7 @@ router.get("/parts/by-category/:categoryid", (req, res) => {
   const { categoryid } = req.params;
   new sqlConnection.sql.Request().query(
     `SELECT SparePartID, SparePartName 
-     FROM Config_SparePart
+     FROM Config_Mould_SparePart
      WHERE SparePartCategoryID = ${categoryid}`,
     (err, result) => {
       if (err) {
@@ -96,7 +96,7 @@ router.get("/parts/by-category-prefferd/:categoryid", (req, res) => {
   const { categoryid } = req.params;
   new sqlConnection.sql.Request().query(
     `SELECT  SparePartName 
-     FROM Config_SparePart
+     FROM Config_Mould_SparePart
      WHERE SparePartCategoryID = ${categoryid} AND PreferredSparePart = 1`,
     (err, result) => {
       if (err) {
@@ -113,7 +113,7 @@ router.get("/details/by-name/:sparename", (req, res) => {
   const { sparename } = req.params;
   new sqlConnection.sql.Request().query(
     `SELECT *
-     FROM Config_SparePart
+     FROM Config_Mould_SparePart
      WHERE SparePartName = '${sparename}'`,
     (err, result) => {
       if (err) {
@@ -146,7 +146,7 @@ router.get("/mouldgroup/:mouldid", (req, res) => {
 router.post("/movement", (request, response) => {
   new sqlConnection.sql.Request().query(
     `UPDATE Mould_SparePartMonitoring SET CurrentQuantity = CurrentQuantity -  ${request.body.Quantity}, LastUpdatedTime = GETDATE() WHERE SparePartID  = ${request.body.SparePartID}
-    Insert Into [PPMS].[dbo].[SparePartGenealogy] ([MouldID],[SparePartID],[CurrentQuantity],[Remark],[Timestamp]) Values (\'${request.body.MouldID}\',${request.body.SparePartID},(SELECT TOP(1) CurrentQuantity FROM Mould_SparePartMonitoring WHERE SparePartID  = ${request.body.SparePartID}),'',GETDATE())
+    Insert Into SparePartGenealogy ([MouldID],[SparePartID],[CurrentQuantity],[Remark],[Timestamp]) Values (\'${request.body.MouldID}\',${request.body.SparePartID},(SELECT TOP(1) CurrentQuantity FROM Mould_SparePartMonitoring WHERE SparePartID  = ${request.body.SparePartID}),'',GETDATE())
     `,
     (err, result) => {
       if (err) {

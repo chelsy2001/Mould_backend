@@ -31,9 +31,9 @@ router.get('/GetCheckPoints/:CheckListID', (request, response) => {
     p.[LastUpdatedTime],
     c.[CheckListName]
 FROM 
-    [PPMS].[dbo].[Mould_Execute_PMCheckPoint] p
+    Mould_Execute_PMCheckPoint p
 JOIN 
-    [PPMS].[dbo].[Config_PMCheckList] c
+    Config_Mould_PMCheckList c
     ON p.CheckListID = c.CheckListID
 WHERE 
     p.CheckListID = @CheckListID  

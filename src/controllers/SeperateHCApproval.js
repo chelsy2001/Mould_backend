@@ -231,7 +231,7 @@ router.post('/UpdateCheckPoint', async (req, res) => {
 
   try {
     const query = `
-      UPDATE [PPMS].[dbo].[Mould_Execute_HCCheckPoint]
+      UPDATE Mould_Execute_HCCheckPoint
       SET 
         Observation = @Observation,
         OKNOK = @OKNOK,

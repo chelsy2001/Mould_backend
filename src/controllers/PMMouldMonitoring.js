@@ -14,7 +14,7 @@ router.get("/PMChecklist", (request, response) => {
     sch.UID,
     sch.CheckListID,
     chk.CheckListName,
-    sch.MachineID,
+    sch.EquipmentID,
     sch.MouldID,
     mould.MouldName,
     sch.PMFreqCount,
@@ -27,9 +27,9 @@ router.get("/PMChecklist", (request, response) => {
     sch.LastUpdatedTime,
     sch.LastUpdatedBy
 FROM 
-    PPMS.dbo.Config_PMSchedule AS sch
+    Config_Mould_PMSchedule AS sch
 LEFT JOIN 
-    PPMS.dbo.Config_PMCheckList AS chk
+    Config_Mould_PMCheckList AS chk
     ON sch.CheckListID = chk.CheckListID
 LEFT JOIN 
     PPMS.dbo.Config_Mould AS mould

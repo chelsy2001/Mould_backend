@@ -16,7 +16,7 @@ router.get("/PMChecklistForApproval", (request, response) => {
     sch.UID,
     sch.CheckListID,
     chk.CheckListName,
-    sch.MachineID,
+    sch.EquipmentID,
     sch.MouldID,
     mould.MouldName,
     sch.PMFreqCount,
@@ -29,12 +29,12 @@ router.get("/PMChecklistForApproval", (request, response) => {
     sch.LastUpdatedTime,
     sch.LastUpdatedBy
 FROM 
-    PPMS.dbo.Config_PMSchedule AS sch
+    Config_Mould_PMSchedule AS sch
 LEFT JOIN 
-    PPMS.dbo.Config_PMCheckList AS chk
+    Config_Mould_PMCheckList AS chk
     ON sch.CheckListID = chk.CheckListID
 LEFT JOIN 
-    PPMS.dbo.Config_Mould AS mould
+    Config_Mould AS mould
     ON sch.MouldID = mould.MouldID
     ORDER BY 
     CASE 
@@ -56,8 +56,8 @@ router.get("/Users", (request, response) => {
     new sqlConnection.sql.Request().query(
         `
    SELECT CU.UserName
-FROM [PPMS].[dbo].[Config_User] CU
-JOIN [PPMS].[dbo].[Config_Role] CR
+FROM Config_User CU
+JOIN Config_Role CR
     ON CU.RoleID = CR.RoleID
 WHERE CR.RoleName = 'Quality Supervisor'; `,
         (err, result) => {
@@ -83,7 +83,7 @@ router.post("/login", (req, res) => {
     request.input("Password", sqlConnection.sql.NVarChar, password);
 
     request.query(
-        `SELECT * FROM [PPMS].[dbo].[Config_User] 
+        `SELECT * FROM Config_User 
      WHERE UserName = @UserName AND Password = @Password`,
         (err, result) => {
             if (err) {
@@ -158,7 +158,7 @@ router.post("/ApproveChecklist", async (req, res) => {
         // Step 1: Get MouldID from checklistID
         const result = await request.query(`
       SELECT TOP 1 MouldID 
-      FROM [PPMS].[dbo].[Mould_Execute_PMCheckList] 
+      FROM Mould_Execute_PMCheckList 
       WHERE CheckListID = @CheckListID
     `);
 
@@ -171,7 +171,7 @@ router.post("/ApproveChecklist", async (req, res) => {
         // Step 2: Execute stored procedure
         const procRequest = new sql.Request();
         procRequest.input('MouldID', sql.NVarChar(50), mouldID);
-        await procRequest.execute('[dbo].[PM_ExecutionDataMovemnetToHistory]');
+        await procRequest.execute('PM_ExecutionDataMovemnetToHistory');
 
         return middlewares.standardResponse(res, null, 200, "Checklist approved and data moved to history");
     } catch (err) {
@@ -207,9 +207,9 @@ router.get('/GetCheckPoints/:CheckListID', (request, response) => {
     p.[LastUpdatedTime],
     c.[CheckListName]
 FROM 
-    [PPMS].[dbo].[Mould_Execute_PMCheckPoint] p
+    Mould_Execute_PMCheckPoint p
 JOIN 
-    [PPMS].[dbo].[Config_PMCheckList] c
+    Config_Mould_PMCheckList c
     ON p.CheckListID = c.CheckListID
 WHERE 
     p.CheckListID = @CheckListID ;
@@ -237,7 +237,7 @@ router.post('/UpdateCheckPoint', async (req, res) => {
 
   try {
     const query = `
-      UPDATE [PPMS].[dbo].[Mould_Execute_PMCheckPoint]
+      UPDATE Mould_Execute_PMCheckPoint
       SET 
         Observation = @Observation,
         OKNOK = @OKNOK,

@@ -32,9 +32,9 @@ router.get('/GetCheckPoints/:CheckListID', (request, response) => {
     p.[LastUpdatedTime],
     c.[CheckListName]
 FROM 
-    [PPMS].[dbo].[Mould_Execute_PMCheckPoint] p
+    Mould_Execute_PMCheckPoint p
 JOIN 
-    [PPMS].[dbo].[Config_PMCheckList] c
+    Config_Mould_PMCheckList] c
     ON p.CheckListID = c.CheckListID
 WHERE 
     p.CheckListID = @CheckListID  AND 
@@ -63,7 +63,7 @@ router.post('/UpdateCheckPointStatus', async (req, res) => {
 
   try {
     const query = `
-      UPDATE [PPMS].[dbo].[Mould_Execute_PMCheckPoint]
+      UPDATE Mould_Execute_PMCheckPoint
       SET 
         Observation = @Observation,
         OKNOK = @OKNOK,
@@ -100,7 +100,7 @@ router.post('/SubmitPreparation', async (req, res) => {
     // Count NULL OKNOK entries
     const countNullResult = await sqlRequest.query(`
       SELECT COUNT(*) as NullCount 
-      FROM [PPMS].[dbo].[Mould_Execute_PMCheckPoint] 
+      FROM Mould_Execute_PMCheckPoint
       WHERE OKNOK IS NULL AND CheckListID = ${CheckListID} AND CheckListType = 1
     `);
 
@@ -109,7 +109,7 @@ router.post('/SubmitPreparation', async (req, res) => {
     // Count NOK entries
     const countNokResult = await sqlRequest.query(`
       SELECT COUNT(*) as NokCount 
-      FROM [PPMS].[dbo].[Mould_Execute_PMCheckPoint] 
+      FROM Mould_Execute_PMCheckPoint 
       WHERE OKNOK = 2 AND CheckListID = ${CheckListID} AND CheckListType = 1
     `);
 
@@ -119,7 +119,7 @@ router.post('/SubmitPreparation', async (req, res) => {
       // Fetch MouldID
       const mouldResult = await sqlRequest.query(`
         SELECT MouldID 
-        FROM [PPMS].[dbo].[Mould_Execute_PMCheckList] 
+        FROM Mould_Execute_PMCheckList 
         WHERE CheckListID = ${CheckListID}
       `);
 
