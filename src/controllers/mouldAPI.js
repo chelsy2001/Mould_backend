@@ -21,6 +21,7 @@ router.get("/details/:machine/:mould", (request, response) => {
       MM.MouldLifeStatus,
       MM.MouldStatus,
       MMM.ProductGroupID,
+      MMM.ValidationStatus,
       PG.ProductGroupName
     FROM 
       Mould_MachineMatrix MMM
@@ -89,6 +90,27 @@ router.post("/update", (request, response) => {
       }
     }
   );
+});
+
+router.post("/updateValidationStatus", (req, res) => {
+  const { EquipmentID, mouldID } = req.body;
+
+  const query = `
+    UPDATE Mould_MachineMatrix
+    SET ValidationStatus = 1,
+        LastUpdatedTime = GETDATE(),
+        LastUpdatedBy = 'system'
+    WHERE EquipmentID = '${EquipmentID}' AND MouldID = '${mouldID}'
+  `;
+
+  new sqlConnection.sql.Request().query(query, (err, result) => {
+    if (err) {
+      console.error("Error updating ValidationStatus:", err);
+      return middlewares.standardResponse(res, null, 500, "Database error");
+    } else {
+      return middlewares.standardResponse(res, result.rowsAffected, 200, "ValidationStatus updated successfully");
+    }
+  });
 });
 
 router.post("/load", (request, response) => {
