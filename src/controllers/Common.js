@@ -103,5 +103,23 @@ WHERE
   );
 });
 
+// Reports 
+router.get("/report", (req, res) => {
+  try {
+    const reportUrl = "http://localhost:8081";
+
+    // Redirect to SSRS viewer in browser
+    return res.redirect(reportUrl);
+  } catch (err) {
+    console.error("Redirection error:", err.message);
+    middlewares.standardResponse(
+      res,
+      null,
+      500,
+      "Error redirecting to report: " + err.message
+    );
+  }
+});
+
 
 module.exports = router;

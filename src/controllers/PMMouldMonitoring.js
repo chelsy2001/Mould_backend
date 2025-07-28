@@ -32,7 +32,7 @@ LEFT JOIN
     Config_Mould_PMCheckList AS chk
     ON sch.CheckListID = chk.CheckListID
 LEFT JOIN 
-    PPMS.dbo.Config_Mould AS mould
+   dbo.Config_Mould AS mould
     ON sch.MouldID = mould.MouldID
 	ORDER BY 
     CASE 

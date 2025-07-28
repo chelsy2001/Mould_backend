@@ -57,91 +57,109 @@ router.get("/Lines", (request, response) => {
 });
 
 
-// GET downtime details based on LineName
-// router.get("/downtime/details/LineName", (request, response) => {
-//     const { LineName } = request.query; // Get LineName from query parameters
 
-//     if (!LineName) {
-//         return middlewares.standardResponse(response, null, 400, "LineName is required");
-//     }
+//get api to show all dowmtimes
+router.get("/Getdowntime/details/:EquipmentID", async (request, response) => {
+    const { EquipmentID } = request.params;
 
-//     const sqlRequest = new sqlConnection.sql.Request();
-//     sqlRequest.input("LineName", sqlConnection.sql.VarChar, LineName); // Bind the parameter
+    if (!EquipmentID) {
+        return middlewares.standardResponse(response, null, 400, "EquipmentID is required");
+    }
 
-//     sqlRequest.query(
-//         `SELECT 
-//             d.DowntimeID,
-//             d.StationID,
-//             s.StationName,
-//             d.ProdDate,
-//             d.ProdShift,
-//             d.StartTime,
-//             d.EndTime,
-//             d.SystemDownTime,
-//             d.PLCDownTime,
-//             d.LossID,
-//             d.Reason,
-//             l.LossName,
-//             d.SubLossID,
-//             sl.SubLossName,
-//             c.LineID, 
-//             c.LineName
-//         FROM PPMS.dbo.Perf_Downtime d
-//         JOIN PPMS.dbo.Config_Station s ON d.StationID = s.StationID
-//         JOIN PPMS.dbo.Config_Line c ON s.LineID = c.LineID
-//         LEFT JOIN PPMS.dbo.Config_LossCategory l ON d.LossID = l.LossID
-//         LEFT JOIN PPMS.dbo.Config_SubLossCategory sl ON d.SubLossID = sl.SubLossID
-//         WHERE c.LineName = @LineName;`,
-//         (err, result) => {
-//             if (err) {
-//                 console.error("Query Error:", err);
-//                 return middlewares.standardResponse(response, null, 500, "Error executing query: " + err);
-//             }
-//             middlewares.standardResponse(response, result.recordset, 200, "Success");
-//         }
-//     );
-// });
+    try {
+        const sqlRequest = new sqlConnection.sql.Request();
+        sqlRequest.input("EquipmentID", sqlConnection.sql.Int, EquipmentID);
 
+        const query = `
+            -- Get the StationID for the given EquipmentID
+            DECLARE @StationID INT;
 
-router.get("/downtime/details/LineName", (request, response) => {
-    const { LineName } = request.query; // Get LineName from query parameters
+            SELECT @StationID = StationID
+            FROM PPMS_LILBawal.dbo.Config_Equipment
+            WHERE EquipmentID = @EquipmentID;
 
-    // if (!LineName) {
-    //     return middlewares.standardResponse(response, null, 400, "LineName is required");
-    // }
+            -- If StationID found, get Downtime Details
+            SELECT 
+                d.DowntimeID,
+                d.StationID,
+                d.ProdDate,
+                d.ProdShift,
+                d.StartTime,
+                d.EndTime,
+                d.SystemDownTime,
+                d.PLCDownTime,
+                d.LossID,
+                d.Reason,
+                l.LossName,
+                d.SubLossID,
+                sl.SubLossName
+            FROM PPMS_LILBawal.dbo.Perf_Downtime d
+            LEFT JOIN Config_LossCategory l ON d.LossID = l.LossID
+            LEFT JOIN Config_SubLossCategory sl ON d.SubLossID = sl.SubLossID
+            WHERE d.StationID = @StationID;
+        `;
 
-    const sqlRequest = new sqlConnection.sql.Request();
-    sqlRequest.input("LineName", sqlConnection.sql.VarChar, LineName); // Bind the parameter
-
-    sqlRequest.query(
-        `SELECT 
-            d.DowntimeID,
-            d.StationID,
-       
-            d.ProdDate,
-            d.ProdShift,
-            d.StartTime,
-            d.EndTime,
-            d.SystemDownTime,
-            d.PLCDownTime,
-            d.LossID,
-            d.Reason,
-            l.LossName,
-            d.SubLossID,
-            sl.SubLossName
-        FROM Perf_Downtime d
-        LEFT JOIN PPMS.dbo.Config_LossCategory l ON d.LossID = l.LossID
-        LEFT JOIN PPMS.dbo.Config_SubLossCategory sl ON d.SubLossID = sl.SubLossID
-       ;`,
-        (err, result) => {
-            if (err) {
-                console.error("Query Error:", err);
-                return middlewares.standardResponse(response, null, 500, "Error executing query: " + err);
-            }
-            middlewares.standardResponse(response, result.recordset, 200, "Success");
-        }
-    );
+        const result = await sqlRequest.query(query);
+        return middlewares.standardResponse(response, result.recordset, 200, "Success");
+    } catch (err) {
+        console.error("Query Error:", err);
+        return middlewares.standardResponse(response, null, 500, "Error executing query: " + err);
+    }
 });
+
+// API to show the unassigned dt for dt screeen table
+router.get("/Getdowntime/unassigned/:EquipmentID", async (request, response) => {
+    const { EquipmentID } = request.params;
+
+    if (!EquipmentID) {
+        return middlewares.standardResponse(response, null, 400, "EquipmentID is required");
+    }
+
+    try {
+        const sqlRequest = new sqlConnection.sql.Request();
+        sqlRequest.input("EquipmentID", sqlConnection.sql.Int, EquipmentID);
+
+        const query = `
+            -- Get the StationID for the given EquipmentID
+            DECLARE @StationID INT;
+
+            SELECT @StationID = StationID
+            FROM PPMS_LILBawal.dbo.Config_Equipment
+            WHERE EquipmentID = @EquipmentID;
+
+            -- If StationID found, get only UNASSIGNED Downtime Details
+            SELECT 
+                d.DowntimeID,
+                d.StationID,
+                d.ProdDate,
+                d.ProdShift,
+                d.StartTime,
+                d.EndTime,
+                d.SystemDownTime,
+                d.PLCDownTime,
+                d.LossID,
+                d.Reason,
+                l.LossName,
+                d.SubLossID,
+                sl.SubLossName
+            FROM PPMS_LILBawal.dbo.Perf_Downtime d
+            LEFT JOIN Config_LossCategory l ON d.LossID = l.LossID
+            LEFT JOIN Config_SubLossCategory sl ON d.SubLossID = sl.SubLossID
+            WHERE 
+                d.StationID = @StationID
+                AND (d.LossID IS NULL OR d.LossID = 0 OR d.SubLossID IS NULL OR d.SubLossID = 0);
+        `;
+
+        const result = await sqlRequest.query(query);
+        return middlewares.standardResponse(response, result.recordset, 200, "Success");
+    } catch (err) {
+        console.error("Query Error:", err);
+        return middlewares.standardResponse(response, null, 500, "Error executing query: " + err);
+    }
+});
+
+
+
 
 // Update downtime details: Reason, LossName, SubLossName
 router.put("/downtime/update", async (request, response) => {
@@ -194,49 +212,49 @@ router.put("/downtime/update", async (request, response) => {
 });
 
 // GET downtime details based on LineName
-router.get("/downtime/trend/LineName", (req, res) => {
-  const { LineName, prodDate } = req.query;
+// router.get("/downtime/trend/LineName", (req, res) => {
+//   const { LineName, prodDate } = req.query;
 
-  if (!LineName || !prodDate) {
-    return middlewares.standardResponse(res, null, 400, "Missing required parameters: LineName or prodDate");
-  }
+//   if (!LineName || !prodDate) {
+//     return middlewares.standardResponse(res, null, 400, "Missing required parameters: LineName or prodDate");
+//   }
 
-  const sqlRequest = new sqlConnection.sql.Request();
-  sqlRequest.input("LineName", sqlConnection.sql.VarChar, LineName);
-  sqlRequest.input("ProdDate", sqlConnection.sql.Date, prodDate);
+//   const sqlRequest = new sqlConnection.sql.Request();
+//   sqlRequest.input("LineName", sqlConnection.sql.VarChar, LineName);
+//   sqlRequest.input("ProdDate", sqlConnection.sql.Date, prodDate);
 
-  const query = `
-    SELECT 
-      o.StationID,
-      o.TotalDownTime,
-      o.ProdDate,
-      DATEPART(HOUR, o.[Timestamp]) AS Hour,
-      c.LineName
-    FROM 
-      [Perf_CycleTime] o 
-    JOIN Config_Station s ON o.StationID = s.StationID
-    JOIN Config_Line c ON s.LineID = c.LineID
-    WHERE 
-      c.LineName = @LineName
-      AND CAST(o.ProdDate AS DATE) = @ProdDate
-    GROUP BY 
-      o.StationID,
-      o.TotalDownTime,
-      o.ProdDate,
-      DATEPART(HOUR, o.[Timestamp]),
-      c.LineName
-    ORDER BY 
-      Hour;
-  `;
+//   const query = `
+//     SELECT 
+//       o.StationID,
+//       o.TotalDownTime,
+//       o.ProdDate,
+//       DATEPART(HOUR, o.[Timestamp]) AS Hour,
+//       c.LineName
+//     FROM 
+//       [Perf_CycleTime] o 
+//     JOIN Config_Station s ON o.StationID = s.StationID
+//     JOIN Config_Line c ON s.LineID = c.LineID
+//     WHERE 
+//       c.LineName = @LineName
+//       AND CAST(o.ProdDate AS DATE) = @ProdDate
+//     GROUP BY 
+//       o.StationID,
+//       o.TotalDownTime,
+//       o.ProdDate,
+//       DATEPART(HOUR, o.[Timestamp]),
+//       c.LineName
+//     ORDER BY 
+//       Hour;
+//   `;
 
-  sqlRequest.query(query, (err, result) => {
-    if (err) {
-      console.error("Query Error:", err);
-      return middlewares.standardResponse(res, null, 500, "Error executing query: " + err);
-    }
-    middlewares.standardResponse(res, result.recordset, 200, "Success");
-  });
-});
+//   sqlRequest.query(query, (err, result) => {
+//     if (err) {
+//       console.error("Query Error:", err);
+//       return middlewares.standardResponse(res, null, 500, "Error executing query: " + err);
+//     }
+//     middlewares.standardResponse(res, result.recordset, 200, "Success");
+//   });
+// });
 
 
 module.exports = router;

@@ -1,122 +1,57 @@
 const express = require("express");
 const sqlConnection = require("../databases/ssmsConn.js");
 const middlewares = require("../middlewares/middlewares.js");
+const { sql, config } = require('../databases/ssmsConn.js');
 
 const router = express.Router();
 
 
-//update rework details
-// POST: Update Count, Reason, and Remark using stored procedure
-router.post('/update-rework', async (request, response) => {
-  const { LineID, UserRole, Action, Count, Reason, Remark } = request.body;
 
-  try {
-    const procRequest = new sqlConnection.sql.Request();
-    procRequest.input('LineID', sqlConnection.sql.Int, LineID);
-    procRequest.input('UserRole', sqlConnection.sql.NVarChar(50), UserRole);
-    procRequest.input('Action', sqlConnection.sql.NVarChar(50), Action);
-    procRequest.input('Count', sqlConnection.sql.Int, Count);
-    procRequest.input('Reason', sqlConnection.sql.NVarChar(255), Reason);
-    procRequest.input('Remark', sqlConnection.sql.NVarChar(sqlConnection.sql.MAX), Remark);
+// GET Rework data by EquipmentID from Rework_Genealogy table
+router.get('/ReworkGenelogy/:EquipmentID', (request, response) => {
+  const EquipmentID = parseInt(request.params.EquipmentID);
 
-    await procRequest.execute('[PPMS].[dbo].[Insert_ReworkGenealogy1]');
-
-    return middlewares.standardResponse(response, null, 200, 'Rework genealogy updated successfully.');
-  } catch (err) {
-    console.error('Error executing update-rework:', err);
-    return middlewares.standardResponse(response, null, 500, 'Error updating rework genealogy: ' + err.message);
+  if (isNaN(EquipmentID)) {
+    return middlewares.standardResponse(response, null, 400, 'Invalid EquipmentID');
   }
-});
-
-
-
-// GET Perf_CycleTime data by LineID
-router.get('/cycletime/:lineID', (request, response) => {
-  const lineID = request.params.lineID;
 
   const query = `
-    SELECT top(1) pct.*
-    FROM [PPMS].[dbo].[Perf_CycleTime] pct
-    INNER JOIN [PPMS].[dbo].[Config_Station] cs ON pct.StationID = cs.StationID
-    INNER JOIN [PPMS].[dbo].[Config_Line] cl ON cs.LineID = cl.LineID
-    WHERE cl.LineID = @lineID
-    ORDER BY pct.Timestamp DESC
+    SELECT 
+      RG.UID,
+      RG.EquipmentID,
+      CE.EquipmentName,
+      RG.UserID,
+      CU.UserName,
+      RG.ProdDate,
+      RG.ProdShift,
+      RG.NOKQuantity,
+      RG.Reason,
+      RG.Remark
+    FROM [Rework_Genealogy] RG
+    LEFT JOIN [Config_User] CU ON RG.UserID = CU.UserID
+    LEFT JOIN [Config_Equipment] CE ON RG.EquipmentID = CE.EquipmentID
+    WHERE RG.EquipmentID = @EquipmentID
+    ORDER BY RG.UID DESC
   `;
 
   const sqlRequest = new sqlConnection.sql.Request();
-  sqlRequest.input('lineID', sqlConnection.sql.Int, lineID);
+  sqlRequest.input('EquipmentID', sqlConnection.sql.Int, EquipmentID);
 
   sqlRequest.query(query, (err, result) => {
     if (err) {
-      middlewares.standardResponse(response, null, 300, 'Error executing query: ' + err);
+      middlewares.standardResponse(response, null, 500, 'Error executing query: ' + err);
     } else {
       middlewares.standardResponse(response, result.recordset, 200, 'Success');
     }
   });
 });
-//API to fetch Role base action 
-router.get("/get-actions/:role", (request, response) => {
-    const role = request.params.role;
-  
-    const query = `
-      SELECT [Action]
-      FROM [PPMS].[dbo].[Rework_StatusReference]
-      WHERE [Role] = @role
-    `;
-  
-    const sqlRequest = new sqlConnection.sql.Request();
-    sqlRequest.input("role", sqlConnection.sql.VarChar, role);
-  
-    sqlRequest.query(query, (err, result) => {
-      if (err) {
-        middlewares.standardResponse(response, null, 300, "Error executing query: " + err);
-      } else {
-        middlewares.standardResponse(response, result.recordset, 200, "Success");
-      }
-    });
-  });
-  //gET THE REWORK geneology on the basis of lineid
-  router.get("/rework-genealogy/:lineID", (request, response) => {
-    const lineID = request.params.lineID;
-  
-    const query = `
-      SELECT 
-          RG.[UID],
-          RG.[Timestamp],
-          RG.[LineID],
-          CL.LineName,
-          RG.[User],
-          RG.[ProdDate],
-          RG.[ProdShift],
-          RG.[SKUID],
-          CS.SKUName,
-          RG.[Qty],
-          RG.[StatusID],
-          RG.[Reason],
-          RG.[Remark]
-      FROM 
-          [PPMS].[dbo].[Rework_Genealogy] AS RG
-      LEFT JOIN 
-          [PPMS].[dbo].[Config_Line] AS CL ON RG.LineID = CL.LineID
-      LEFT JOIN 
-          [PPMS].[dbo].[Config_SKU] AS CS ON RG.SKUID = CS.SKUID
-      WHERE 
-          RG.LineID = ${lineID}
-    `;
-  
-    new sqlConnection.sql.Request().query(query, (err, result) => {
-      if (err) {
-        middlewares.standardResponse(response, null, 300, "Error executing query: " + err);
-      } else {
-        middlewares.standardResponse(response, result.recordset, 200, "Success");
-      }
-    });
-  });
+
+
 
   //get Rework reasons 
   router.get("/ReworkReason", (request, response) => {
       new sqlConnection.sql.Request().query(
-        `select * from [PPMS].[dbo].[Config_ReworkReason]`,
+        `select * from [Config_ReworkReason]`,
         (err, result) => {
           if (err) {
             middlewares.standardResponse(response, null, 300, "Error executing query: " + err);
@@ -127,7 +62,131 @@ router.get("/get-actions/:role", (request, response) => {
       );
     });
   
+
+
   
+//--------get the qty's---
+ router.get("/CycleSummary", async (request, response) => {
+  const { ProdDate, ProdShift, EquipmentID } = request.query;
+
+  if (!ProdDate || !ProdShift || !EquipmentID) {
+    return middlewares.standardResponse(response, null, 400, "Missing required parameters: ProdDate, ProdShift, EquipmentID");
+  }
+
+  try {
+    // Connect to SQL if not already connected
+    await sqlConnection.sql.connect(config);
+
+    // Step 1: Get StationID from Config_Station based on EquipmentID (assumed in Token)
+    const stationResult = await new sqlConnection.sql.Request()
+      .input('EquipmentID', sqlConnection.sql.VarChar, EquipmentID)
+      .query(`
+        SELECT StationID 
+        FROM [PPMS_LILBawal].[dbo].[Config_Equipment]
+        WHERE EquipmentID = @EquipmentID
+      `);
+
+    if (stationResult.recordset.length === 0) {
+      return middlewares.standardResponse(response, null, 404, "No StationID found for the given EquipmentID");
+    }
+
+    const stationID = stationResult.recordset[0].StationID;
+
+    // Step 2: Fetch latest production data for the StationID
+    const productionResult = await new sqlConnection.sql.Request()
+      .input('ProdDate', sqlConnection.sql.Date, ProdDate)
+      .input('ProdShift', sqlConnection.sql.VarChar, ProdShift)
+     .input('StationID', sqlConnection.sql.Int, stationID)
+      .query(`
+        SELECT TOP 1 
+          TotalCount, 
+          GoodPart, 
+          RejectedCount
+        FROM [PPMS_LILBawal].[dbo].[Perf_CycleTime]
+        WHERE ProdDate = @ProdDate 
+          AND ProdShift = @ProdShift 
+          AND StationID = @StationID
+        ORDER BY [Timestamp] DESC
+      `);
+
+    middlewares.standardResponse(response, productionResult.recordset, 200, "Success");
+
+  } catch (err) {
+    middlewares.standardResponse(response, null, 500, "Error executing query: " + err.message);
+  }
+});
+
+//Update API
+// POST /rework/update-rework
+router.post('/update-rework-cycle-summary', async (req, res) => {
+  const { EquipmentName, UserName, ProdDate, ProdShift, NOTOKQuantity, ReworkReason, Remark } = req.body;
+
+  if (!EquipmentName || !UserName || !ProdDate || !ProdShift || !NOTOKQuantity || !ReworkReason) {
+    return middlewares.standardResponse(res, null, 400, "Missing required parameters");
+  }
+
+  try {
+    // Connect to SQL
+    await sqlConnection.sql.connect(config);
+
+    // Step 1: Get EquipmentID and StationID from EquipmentName
+    const equipResult = await new sqlConnection.sql.Request()
+      .input('EquipmentName', sqlConnection.sql.NVarChar, EquipmentName)
+      .query(`
+        SELECT EquipmentID, StationID 
+        FROM [PPMS_LILBawal].[dbo].[Config_Equipment] 
+        WHERE EquipmentName = @EquipmentName
+      `);
+
+    if (equipResult.recordset.length === 0) {
+      return middlewares.standardResponse(res, null, 404, "Equipment not found");
+    }
+
+    const { EquipmentID, StationID } = equipResult.recordset[0];
+
+    // Step 2: Call stored procedure to update rework
+    await new sqlConnection.sql.Request()
+      .input('EquipmentID', sqlConnection.sql.Int, EquipmentID)
+      .input('UserID', sqlConnection.sql.NVarChar, UserName)
+      .input('ProdDate', sqlConnection.sql.Date, ProdDate)
+      .input('ProdShift', sqlConnection.sql.NVarChar(10), ProdShift)
+      .input('NOTOKQuantity', sqlConnection.sql.Int, NOTOKQuantity)
+      .input('ReworkReason', sqlConnection.sql.NVarChar(255), ReworkReason)
+      .input('Remark', sqlConnection.sql.NVarChar(1000), Remark)
+      .execute('RejectedUpdateWithReworkGenealogy');
+
+    // Step 3: Fetch latest CycleSummary
+    const cycleResult = await new sqlConnection.sql.Request()
+      .input('ProdDate', sqlConnection.sql.Date, ProdDate)
+      .input('ProdShift', sqlConnection.sql.VarChar, ProdShift)
+      .input('StationID', sqlConnection.sql.Int, StationID)
+      .query(`
+        SELECT TOP 1 
+          TotalCount, 
+          GoodPart, 
+          RejectedCount
+        FROM [PPMS_LILBawal].[dbo].[Perf_CycleTime]
+        WHERE ProdDate = @ProdDate 
+          AND ProdShift = @ProdShift 
+          AND StationID = @StationID
+        ORDER BY [Timestamp] DESC
+      `);
+
+    return middlewares.standardResponse(
+      res,
+      cycleResult.recordset[0] || {},
+      200,
+      "Rework updated and cycle summary fetched successfully"
+    );
+
+  } catch (error) {
+    console.error('Error in update-rework-cycle-summary:', error);
+    return middlewares.standardResponse(res, null, 500, "Internal server error: " + error.message);
+  }
+});
+
+
+
 module.exports = router;
 
 
