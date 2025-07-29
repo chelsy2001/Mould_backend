@@ -55,11 +55,11 @@ LEFT JOIN
 router.get("/Users", (request, response) => {
     new sqlConnection.sql.Request().query(
         `
-   SELECT CU.UserName
+    SELECT CU.UserName
 FROM Config_User CU
 JOIN Config_Role CR
-    ON CU.RoleID = CR.RoleID
-WHERE CR.RoleName = 'Quality Supervisor'; `,
+    ON CU.DepartmentRoleID = CR.RoleID
+WHERE CR.RoleName = 'Quality Supervisor';  `,
         (err, result) => {
             if (err) {
                 middlewares.standardResponse(response, null, 300, "Error executing query: " + err);
@@ -163,7 +163,7 @@ router.post("/ApproveChecklist", async (req, res) => {
     `);
 
         if (result.recordset.length === 0) {
-            return middlewares.standardResponse(res, null, 404, "MouldID not found for provided ChecklistID");
+            return middlewares.standardResponse(res, null, 404, "MouldID not found for 353 provided ChecklistID");
         }
 
         const mouldID = result.recordset[0].MouldID;

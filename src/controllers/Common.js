@@ -106,7 +106,7 @@ WHERE
 // Reports 
 router.get("/report", (req, res) => {
   try {
-    const reportUrl = "http://localhost:8081";
+    const reportUrl = "http://localhost:8083";
 
     // Redirect to SSRS viewer in browser
     return res.redirect(reportUrl);
