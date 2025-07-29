@@ -34,7 +34,7 @@ router.get('/GetExecuteCheckPoints/:CheckListID', (request, response) => {
 FROM 
     Mould_Execute_PMCheckPoint p
 JOIN 
-    Config_Mould_PMCheckList] c
+    Config_Mould_PMCheckList c
     ON p.CheckListID = c.CheckListID
 WHERE 
     p.CheckListID = @CheckListID  AND 
