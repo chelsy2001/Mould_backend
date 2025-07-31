@@ -26,9 +26,17 @@ router.post("/upload-image/:mouldID", upload.single("image"), async (req, res) =
     request.input("mouldID", sqlConnection.sql.NVarChar, mouldID);
 
     await request.query(`
-      UPDATE Mould_Images 
-      SET Image = @Image, Timestamp = GETDATE()
-      WHERE MouldID = @mouldID
+     IF EXISTS (SELECT 1 FROM Mould_Images WHERE MouldID = @mouldID)
+BEGIN
+    UPDATE Mould_Images 
+    SET Image = @Image, Timestamp = GETDATE()
+    WHERE MouldID = @mouldID
+END
+ELSE
+BEGIN
+    INSERT INTO Mould_Images (MouldID, Image, Timestamp)
+    VALUES (@mouldID, @Image, GETDATE())
+END
     `);
 
     middlewares.standardResponse(res, null, 200, "✅ Image uploaded and saved to database successfully");
