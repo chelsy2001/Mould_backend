@@ -454,5 +454,31 @@ WHERE EquipmentID = @EquipmentID AND MouldID = @MouldID;
   }
 });
 
+router.get("/activebreakdown/:mouldId", async (req, res) => {
+  const { mouldId } = req.params;
+
+  try {
+    const request = new sqlConnection.sql.Request();
+    request.input("MouldID", sqlConnection.sql.VarChar, mouldId);
+
+    const result = await request.query(`
+      SELECT TOP 1 BDReason, BDRemark, BDStartTime 
+      FROM [Mould_BreakDownLog] 
+      WHERE MouldID = @MouldID AND BDEndTime IS NULL
+      ORDER BY BDStartTime DESC
+    `);
+
+    if (result.recordset.length > 0) {
+      res.status(200).json({ status: 200, data: result.recordset[0] });
+    } else {
+      res.status(404).json({ status: 404, message: "No active breakdown" });
+    }
+  } catch (err) {
+    console.error("Error:", err);
+    res.status(500).json({ status: 500, message: "Server error" });
+  }
+});
+
+
 
 module.exports = router;
