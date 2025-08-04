@@ -12,11 +12,11 @@ const router = express.Router();
 router.get("/HCChecklistForApproval", (request, response) => {
     new sqlConnection.sql.Request().query(
         `
-  SELECT 
+ SELECT 
     sch.UID,
     sch.CheckListID,
     chk.CheckListName,
-    sch.MachineID,
+    sch.EquipmentID,
     sch.MouldID,
     mould.MouldName,
     sch.HCFreqCount,
@@ -29,18 +29,18 @@ router.get("/HCChecklistForApproval", (request, response) => {
     sch.LastUpdatedTime,
     sch.LastUpdatedBy
 FROM 
-    PPMS.dbo.Config_HCSchedule AS sch
+   Config_Mould_HCSchedule AS sch
 LEFT JOIN 
-    PPMS.dbo.Config_HCCheckList AS chk
+ Config_Mould_HCCheckList AS chk
     ON sch.CheckListID = chk.CheckListID
 LEFT JOIN 
-    PPMS.dbo.Config_Mould AS mould
+ Config_Mould AS mould
     ON sch.MouldID = mould.MouldID
     ORDER BY 
     CASE 
         WHEN sch.HCStatus IN (5) THEN 0  -- Pin rows with ItemID 3 to the top
         ELSE 1
-    END `,
+    END  `,
         (err, result) => {
             if (err) {
                 middlewares.standardResponse(response, null, 300, "Error executing query: " + err);
@@ -55,11 +55,11 @@ LEFT JOIN
 router.get("/Users", (request, response) => {
     new sqlConnection.sql.Request().query(
         `
-   SELECT CU.UserName
-FROM [PPMS].[dbo].[Config_User] CU
-JOIN [PPMS].[dbo].[Config_Role] CR
-    ON CU.RoleID = CR.RoleID
-WHERE CR.RoleName = 'Quality Supervisor'; `,
+SELECT CU.UserName
+FROM Config_User CU
+JOIN Config_Role CR
+    ON CU.DepartmentRoleID = CR.RoleID
+WHERE CR.RoleName = 'Quality Supervisor';  `,
         (err, result) => {
             if (err) {
                 middlewares.standardResponse(response, null, 300, "Error executing query: " + err);
@@ -83,7 +83,7 @@ router.post("/login", (req, res) => {
     request.input("Password", sqlConnection.sql.NVarChar, password);
 
     request.query(
-        `SELECT * FROM [PPMS].[dbo].[Config_User] 
+        `SELECT * FROM [Config_User] 
      WHERE UserName = @UserName AND Password = @Password`,
         (err, result) => {
             if (err) {
@@ -158,7 +158,7 @@ router.post("/ApproveChecklist", async (req, res) => {
         // Step 1: Get MouldID from checklistID
         const result = await request.query(`
       SELECT TOP 1 MouldID 
-      FROM [PPMS].[dbo].[Mould_Execute_HCCheckList] 
+      FROM [Mould_Execute_HCCheckList] 
       WHERE CheckListID = @CheckListID
     `);
 
@@ -201,9 +201,9 @@ router.get('/GetCheckPoints/:CheckListID', (request, response) => {
     p.[LastUpdatedTime],
     c.[CheckListName]
 FROM 
-    [PPMS].[dbo].[Mould_Execute_HCCheckPoint] p
+  [Mould_Execute_HCCheckPoint] p
 JOIN 
-    [PPMS].[dbo].[Config_HCCheckList] c
+    [Config_Mould_HCCheckList] c
     ON p.CheckListID = c.CheckListID
 WHERE 
     p.CheckListID = @CheckListID ;
