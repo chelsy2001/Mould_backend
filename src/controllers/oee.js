@@ -138,6 +138,91 @@ router.get('/unassigned-downtime-count/:EquipmentID', async (req, res) => {
   }
 });
 
+//---------call log
+router.post('/logCall', async (req, res) => {
+  const { EquipmentName, DepartmentName } = req.body;
+
+  if (!EquipmentName || !DepartmentName) {
+    return res.status(400).json({ message: 'EquipmentName and DepartmentName are required.' });
+  }
+
+  try {
+    const request = new sql.Request();
+
+    // Step 1: Get StationID from EquipmentName
+    const stationResult = await request
+      .input('EquipmentName', sql.VarChar, EquipmentName)
+      .query(`SELECT TOP 1 StationID FROM Config_Equipment WHERE EquipmentName = @EquipmentName`);
+
+    if (stationResult.recordset.length === 0) {
+      return res.status(404).json({ message: 'StationID not found for the given EquipmentName.' });
+    }
+
+    const StationID = stationResult.recordset[0].StationID;
+
+    // Step 2: Get DepartmentID from DepartmentName
+    const deptResult = await request
+      .input('DepartmentName', sql.VarChar, DepartmentName)
+      .query(`SELECT TOP 1 DepartmentID FROM Config_Department WHERE DepartmentName = @DepartmentName`);
+
+    if (deptResult.recordset.length === 0) {
+      return res.status(404).json({ message: 'DepartmentID not found for the given DepartmentName.' });
+    }
+
+    const DepartmentID = deptResult.recordset[0].DepartmentID;
+
+    // Step 3: Call the stored procedure
+    const callLogRequest = new sql.Request();
+    callLogRequest.input('StationID', sql.Int, StationID);
+    callLogRequest.input('DepartmentID', sql.Int, DepartmentID);
+
+    await callLogRequest.execute('Prod_Call_Logging');
+
+    return res.status(200).json({ message: 'Call logging successful.' });
+  } catch (error) {
+    console.error('Error executing Prod_Call_Logging:', error);
+    return res.status(500).json({ message: 'Internal server error.', error });
+  }
+});
+
+//get the call which is not ended
+
+// routes/oeeRoutes.js or similar
+router.get('/activeCall/:equipmentName', async (req, res) => {
+  const { equipmentName } = req.params;
+
+  try {
+    const request = new sqlConnection.sql.Request();
+    request.input('EquipmentName', sqlConnection.sql.VarChar, equipmentName);
+
+    const result = await request.query(`
+      SELECT 
+          pcl.UID,
+          pcl.LineID,
+          pcl.StationID,
+          pcl.ProdDate,
+          pcl.ProdShift,
+          pcl.DepartmentID,
+          pcl.StartTime,
+          pcl.EndTime,
+          pcl.CallDuration,
+          pcl.CallStatus
+      FROM Prod_Call_Log pcl
+      JOIN Config_Station cs ON pcl.StationID = cs.StationID
+      JOIN Config_Equipment ce ON ce.StationID = cs.StationID
+      WHERE ce.EquipmentName = @EquipmentName
+        AND pcl.EndTime IS NULL
+      ORDER BY pcl.StartTime DESC
+    `);
+
+    return res.status(200).json(result.recordset);
+  } catch (error) {
+    console.error("Error fetching active calls by equipment:", error);
+    return res.status(500).json({ message: 'Error fetching active calls', error });
+  }
+});
+
+
 
 //Fetch the Empty reason count 
 
