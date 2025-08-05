@@ -379,53 +379,89 @@ router.post("/addbreakdownlog", async (req, res) => {
     EquipmentID,
     CurrentMouldLife,
     ParameterID,
-    ParameterValue,
-    LastUpdatedTime
+    ParameterValue
   } = req.body;
 
-  console.log("Request body:", req.body);
-  
   try {
     const sqlRequest = new sqlConnection.sql.Request();
 
-    // Insert into Mould_BreakDownLog
-    await sqlRequest
+    // Step 1: Check if an active breakdown exists
+    const activeCheck = await sqlRequest
       .input('MouldID', sqlConnection.sql.NVarChar, MouldID)
-      .input('BDStartTime', sqlConnection.sql.DateTimeOffset, BDStartTime)
-      .input('BDEndTime', sqlConnection.sql.DateTimeOffset, BDEndTime)
-      .input('BDDuration', sqlConnection.sql.Int, BDDuration)
-      .input('TotalBDCount', sqlConnection.sql.Int, TotalBDCount)
-      .input('UserID', sqlConnection.sql.NVarChar, UserID)
-      .input('BDReason', sqlConnection.sql.NVarChar, BDReason)
-      .input('BDRemark', sqlConnection.sql.NVarChar, BDRemark)
-      .input('BDStatus', sqlConnection.sql.Int, BDStatus)
-      .input('LastUpdatedTime', sqlConnection.sql.DateTime, LastUpdatedTime)
-
       .query(`
-        SET ANSI_WARNINGS OFF;
-        INSERT INTO Mould_BreakDownLog
-        (MouldID, BDStartTime, BDEndTime, BDDuration, TotalBDCount, UserID, BDReason, BDRemark, BDStatus, LastUpdatedTime)
-        VALUES (@MouldID, @BDStartTime, @BDEndTime, @BDDuration, @TotalBDCount, @UserID, @BDReason, @BDRemark, @BDStatus, GETDATE());
+        SELECT TOP 1 * 
+        FROM Mould_BreakDownLog 
+        WHERE MouldID = @MouldID AND BDEndTime IS NULL 
+        ORDER BY BDStartTime DESC;
       `);
-    console.log("✅ Inserted into Mould_BreakDownLog");
+
+    const hasActiveBreakdown = activeCheck.recordset.length > 0;
+
+    if (hasActiveBreakdown) {
+      const updateRequest = new sqlConnection.sql.Request();
+
+      // Step 2: Update the existing breakdown with end time and remarks
+      await updateRequest
+        .input('MouldID', sqlConnection.sql.NVarChar, MouldID)
+        .input('BDEndTime', sqlConnection.sql.DateTimeOffset, BDEndTime)
+        .input('BDDuration', sqlConnection.sql.Int, BDDuration)
+        .input('BDStatus', sqlConnection.sql.Int, BDStatus)
+        .input('BDRemark', sqlConnection.sql.NVarChar, BDRemark)
+        .query(`
+          SET ANSI_WARNINGS OFF;
+          UPDATE Mould_BreakDownLog
+          SET BDEndTime = @BDEndTime,
+              BDDuration = @BDDuration,
+              BDStatus = @BDStatus,
+              BDRemark = @BDRemark,
+              LastUpdatedTime = GETDATE()
+          WHERE MouldID = @MouldID AND BDEndTime IS NULL;
+        `);
+      console.log("✅ Updated active Mould_BreakDownLog");
+    } else {
+      const insertRequest = new sqlConnection.sql.Request();
+
+      // Step 3: Insert a new breakdown log
+      await insertRequest
+        .input('MouldID', sqlConnection.sql.NVarChar, MouldID)
+        .input('BDStartTime', sqlConnection.sql.DateTimeOffset, BDStartTime)
+        .input('BDEndTime', sqlConnection.sql.DateTimeOffset, BDEndTime)
+        .input('BDDuration', sqlConnection.sql.Int, BDDuration)
+        .input('TotalBDCount', sqlConnection.sql.Int, TotalBDCount)
+        .input('UserID', sqlConnection.sql.NVarChar, UserID)
+        .input('BDReason', sqlConnection.sql.NVarChar, BDReason)
+        .input('BDRemark', sqlConnection.sql.NVarChar, BDRemark)
+        .input('BDStatus', sqlConnection.sql.Int, BDStatus)
+        .query(`
+          SET ANSI_WARNINGS OFF;
+          INSERT INTO Mould_BreakDownLog
+          (MouldID, BDStartTime, BDEndTime, BDDuration, TotalBDCount, UserID, BDReason, BDRemark, BDStatus, LastUpdatedTime)
+          VALUES (@MouldID, @BDStartTime, @BDEndTime, @BDDuration, @TotalBDCount, @UserID, @BDReason, @BDRemark, @BDStatus, GETDATE());
+        `);
+      console.log("✅ Inserted new Mould_BreakDownLog");
+    }
 
     // Update Mould_Monitoring
-    await sqlRequest
+    const monitoringRequest = new sqlConnection.sql.Request();
+    await monitoringRequest
       .input('MouldStatus', sqlConnection.sql.Int, MouldStatus)
       .input('MouldLifeStatus', sqlConnection.sql.NVarChar, MouldLifeStatus)
       .input('EquipmentID', sqlConnection.sql.BigInt, EquipmentID)
+      .input('MouldID', sqlConnection.sql.NVarChar, MouldID)
       .query(`
         SET ANSI_WARNINGS OFF;
         UPDATE Mould_Monitoring
-SET MouldStatus = @MouldStatus,
-    MouldLifeStatus = @MouldLifeStatus,
-    LastUpdatedTime = GETDATE()
-WHERE EquipmentID = @EquipmentID AND MouldID = @MouldID;
+        SET MouldStatus = @MouldStatus,
+            MouldLifeStatus = @MouldLifeStatus,
+            LastUpdatedTime = GETDATE()
+        WHERE EquipmentID = @EquipmentID AND MouldID = @MouldID;
       `);
     console.log("✅ Updated Mould_Monitoring");
 
     // Insert into Mould_Genealogy
-    await sqlRequest
+    const genealogyRequest = new sqlConnection.sql.Request();
+    await genealogyRequest
+      .input('MouldID', sqlConnection.sql.NVarChar, MouldID)
       .input('CurrentMouldLife', sqlConnection.sql.Int, CurrentMouldLife)
       .input('ParameterID', sqlConnection.sql.Int, ParameterID)
       .input('ParameterValue', sqlConnection.sql.Int, ParameterValue)
@@ -438,21 +474,25 @@ WHERE EquipmentID = @EquipmentID AND MouldID = @MouldID;
     console.log("✅ Inserted into Mould_Genealogy");
 
     // Update CONFIG_MOULD
-    await sqlRequest.query(`
-      SET ANSI_WARNINGS OFF;
-      UPDATE CONFIG_MOULD
-      SET MouldStatus = @MouldStatus, LastUpdatedTime = GETDATE()
-      WHERE MouldID = @MouldID;
-    `);
+    const configRequest = new sqlConnection.sql.Request();
+    await configRequest
+      .input('MouldID', sqlConnection.sql.NVarChar, MouldID)
+      .input('MouldStatus', sqlConnection.sql.Int, MouldStatus)
+      .query(`
+        SET ANSI_WARNINGS OFF;
+        UPDATE CONFIG_MOULD
+        SET MouldStatus = @MouldStatus, LastUpdatedTime = GETDATE()
+        WHERE MouldID = @MouldID;
+      `);
     console.log("✅ Updated CONFIG_MOULD");
 
-    // Respond success
     middlewares.standardResponse(res, null, 200, "success");
   } catch (err) {
     console.error("❌ Error executing query:", err);
     middlewares.standardResponse(res, null, 300, "Error executing query: " + err.message);
   }
 });
+
 
 router.get("/activebreakdown/:mouldId", async (req, res) => {
   const { mouldId } = req.params;
