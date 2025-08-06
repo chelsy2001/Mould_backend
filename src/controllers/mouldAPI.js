@@ -92,7 +92,7 @@ router.post("/update", (request, response) => {
   );
 });
 
-router.post("/updateValidationStatus", (req, res) => {
+router.post("/updateValidationStatusLoad", (req, res) => {
   const { EquipmentID, mouldID } = req.body;
 
   const updateAndInsertQuery = `
@@ -121,64 +121,34 @@ router.post("/updateValidationStatus", (req, res) => {
     }
   });
 });
-
-
-router.post("/updateValidationStatusFailed", async (req, res) => {
+router.post("/updateValidationStatUnload", (req, res) => {
   const { EquipmentID, mouldID } = req.body;
 
-  if (!EquipmentID && !mouldID) {
-    return middlewares.standardResponse(res, null, 400, "EquipmentID or MouldID is required");
-  }
+  const updateAndInsertQuery = `
+    BEGIN TRANSACTION;
 
-  try {
-    const request = new sqlConnection.sql.Request();
-    request.input("EquipmentID", sqlConnection.sql.VarChar, EquipmentID);
-    request.input("MouldID", sqlConnection.sql.VarChar, mouldID);
+    -- 1. Update the ValidationStatus
+    UPDATE Mould_MachineMatrix
+    SET ValidationStatus = 0,
+        LastUpdatedTime = GETDATE(),
+        LastUpdatedBy = 'system'
+    WHERE EquipmentID = '${EquipmentID}' AND MouldID = '${mouldID}';
 
-    // Step 1: Check if both IDs exist
-    const checkQuery = `
-      SELECT 
-        (SELECT COUNT(*) FROM Mould_MachineMatrix WHERE EquipmentID = @EquipmentID) AS EquipmentExists,
-        (SELECT COUNT(*) FROM Mould_MachineMatrix WHERE MouldID = @MouldID) AS MouldExists
-    `;
+    -- 2. Insert into the Equipment Log
+    INSERT INTO Mould_EquipmentLog (MouldID, EquipmentID, ValidationStatus, Timestamp)
+    VALUES ('${mouldID}', '${EquipmentID}', 0, GETDATE());
 
-    const checkResult = await request.query(checkQuery);
-    const { EquipmentExists, MouldExists } = checkResult.recordset[0];
+    COMMIT;
+  `;
 
-    // Step 2: If either is NOT found, then update
-    if (EquipmentExists === 0 || MouldExists === 0) {
-      const updateRequest = new sqlConnection.sql.Request();
-      updateRequest.input("EquipmentID", sqlConnection.sql.VarChar, EquipmentID);
-      updateRequest.input("MouldID", sqlConnection.sql.VarChar, mouldID);
-
-      const updateQuery = `
-        UPDATE Mould_MachineMatrix
-        SET ValidationStatus = 0,
-            LastUpdatedTime = GETDATE(),
-            LastUpdatedBy = 'system'
-        WHERE EquipmentID = @EquipmentID OR MouldID = @MouldID
-
-      `;
-
-      const updateResult = await updateRequest.query(updateQuery);
-      return middlewares.standardResponse(
-        res,
-        updateResult.rowsAffected,
-        200,
-        "ValidationStatus updated because one or both IDs were not found"
-      );
+  new sqlConnection.sql.Request().query(updateAndInsertQuery, (err, result) => {
+    if (err) {
+      console.error("Error updating and logging ValidationStatus:", err);
+      return middlewares.standardResponse(res, null, 500, "Database error");
     } else {
-      return middlewares.standardResponse(
-        res,
-        null,
-        200,
-        "No update performed. Both EquipmentID and MouldID exist."
-      );
+      return middlewares.standardResponse(res, result.rowsAffected, 200, "ValidationStatus updated and log inserted successfully");
     }
-  } catch (err) {
-    console.error("Error during validation update check:", err);
-    return middlewares.standardResponse(res, null, 500, "Server error");
-  }
+  });
 });
 
 
