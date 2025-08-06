@@ -39,4 +39,47 @@ router.patch("/update", (request, response) => {
   );
 });
 
+
+//Get PM Details details
+router.get("/PMDetails/:mouldid", (request, response) => {
+  new sqlConnection.sql.Request().query(
+    `SELECT 
+    CMP.CheckListID,
+    CMP.EquipmentID,
+    CMP.MouldID,
+    CMP.PMFreqCount,
+    CMP.PMFreqDays,
+    CMP.PMWarningCount,
+    CMP.PMWarningDays,
+    CMP.MaterialID,
+    CM.MaterialName,        
+    CMP.Instance,
+    CMP.PMStatus
+FROM Config_Mould_PMSchedule CMP
+LEFT JOIN Config_Material CM ON CMP.MaterialID = CM.MaterialID
+WHERE CMP.MouldID = '${request.params.mouldid}';
+; 
+    `,
+    (err, result) => {
+      if (err) {
+        middlewares.standardResponse(
+          response,
+          null,
+          300,
+          "Error executing query: " + err
+        );
+        console.error("Error executing query:", err);
+      } else {
+        middlewares.standardResponse(
+          response,
+          result.recordset,
+          200,
+          "success"
+        );
+        console.dir(result.recordset);
+      }
+    }
+  );
+});
+
 module.exports = router;
