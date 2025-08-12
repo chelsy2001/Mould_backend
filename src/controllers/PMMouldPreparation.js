@@ -3,8 +3,13 @@ const sqlConnection = require("../databases/ssmsConn.js");
 const sql = require("mssql");
 const middlewares = require("../middlewares/middlewares.js");
 
+const multer = require("multer");
+const fs = require("fs");
+const path = require("path");
 const router = express.Router();
-
+// Store uploaded files in memory
+const storage = multer.memoryStorage();
+const upload = multer({ storage });
 
 router.get('/GetCheckPoints/:CheckListID', (request, response) => {
   const CheckListID = request.params.CheckListID;
@@ -149,4 +154,50 @@ router.post('/SubmitPreparation', async (req, res) => {
   }
 });
 
+
+
+router.post("/upload-image-to-checkpoint/:checklistID/:checkpointID", upload.single("image"), async (req, res) => {
+  const { checklistID, checkpointID } = req.params;
+  const file = req.file;
+
+  if (!file) {
+    return middlewares.standardResponse(res, null, 400, "❌ No image file uploaded.");
+  }
+
+  try {
+    // Save image to folder
+    const timestamp = new Date().toISOString().replace(/[-:T.]/g, "_").slice(0, 19);
+    const uploadDir = path.join(__dirname, "../uploads/PMcheckpoints");
+    
+    // Ensure the folder exists
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+
+    // File path: uploads/checkpoints/ChecklistID_CheckPointID_timestamp.jpg
+    const fileName = `Checklist${checklistID}_Checkpoint${checkpointID}_${timestamp}.jpg`;
+    const filePath = path.join(uploadDir, fileName);
+
+    fs.writeFileSync(filePath, file.buffer);
+
+    // Optional: Update DB with just the image path (if needed)
+    const pool = await sqlConnection.sql.connect();
+    const request = pool.request();
+   request.input("Image", sqlConnection.sql.VarBinary(sqlConnection.sql.MAX), file.buffer);
+   request.input("ChecklistID", sqlConnection.sql.Int, checklistID);
+  request.input("CheckPointID", sqlConnection.sql.Int, checkpointID);
+
+    await request.query(`
+       UPDATE [dbo].[Mould_Execute_PMCheckPoint]
+      SET [Image] = @Image, [LastUpdatedTime] = GETDATE()
+      WHERE [CheckListID] = @ChecklistID AND [CheckPointID] = @CheckPointID
+    `);
+
+    middlewares.standardResponse(res, null, 200, "✅ Image uploaded and saved to folder.");
+  } catch (error) {
+    console.error("❌ Upload error:", error);
+    middlewares.standardResponse(res, null, 500, "❌ Failed to upload image.");
+  }
+});
+ 
 module.exports = router;
