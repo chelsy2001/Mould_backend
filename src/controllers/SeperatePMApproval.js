@@ -8,48 +8,111 @@ const { sql, config } = require('../databases/ssmsConn.js');
 
 const router = express.Router();
 
-//to show the checklist
-router.get("/PMChecklistForApproval", (request, response) => {
-    new sqlConnection.sql.Request().query(
-        `
-  SELECT 
-    sch.UID,
-    sch.CheckListID,
-    chk.CheckListName,
-    sch.EquipmentID,
-    sch.MouldID,
-    mould.MouldName,
-    sch.PMFreqCount,
-    sch.PMFreqDays,
-    sch.PMWarningCount,
-    sch.PMWarningDays,
-    sch.MaterialID,
-    sch.Instance,
-    sch.PMStatus,
-    sch.LastUpdatedTime,
-    sch.LastUpdatedBy
-FROM 
-    Config_Mould_PMSchedule AS sch
-LEFT JOIN 
-    Config_Mould_PMCheckList AS chk
-    ON sch.CheckListID = chk.CheckListID
-LEFT JOIN 
-    Config_Mould AS mould
-    ON sch.MouldID = mould.MouldID
-    ORDER BY 
-    CASE 
-        WHEN sch.PMStatus IN (6) THEN 0  -- Pin rows with ItemID 3 to the top
-        ELSE 1
-    END `,
-        (err, result) => {
-            if (err) {
-                middlewares.standardResponse(response, null, 300, "Error executing query: " + err);
-            } else {
-                middlewares.standardResponse(response, result.recordset, 200, "success");
-            }
-        }
-    );
+// API endpoint: Get PM Approval details
+router.get("/pm-approval/:mouldId", async (req, res) => {
+  const { mouldId } = req.params;
+
+  try {
+    const pool = await sql.connect(config);
+
+    // ====================
+    // Query 1: PM Start details (Waiting for approval)
+    // ====================
+    const startQuery = `
+     SELECT  
+      CL.[UID],
+      CL.[CheckListID],
+      CL.[CheckListName],
+      CL.[MouldID],
+      CM.MouldName,
+      MM.NextPMDue AS 'DueShots',
+      MM.NextPMDueDate AS 'DueDate',
+      CU.[UserName] AS 'DoneBy',
+      CL.[PMStatus],
+      CL.[AtMouldLife] AS 'PMShots',
+      CL.[Remark],
+      CL.[TimeStamp] AS 'PMStartDate',
+      H.Instance
+FROM [dbo].[Mould_Execute_PMCheckList] CL
+JOIN Config_Mould CM 
+      ON CL.MouldID = CM.MouldID
+JOIN Mould_Monitoring MM 
+      ON CL.MouldID = MM.MouldID
+LEFT JOIN Config_User CU 
+      ON CL.UserID = CU.UserID
+LEFT JOIN [dbo].[Mould_Executed_PMCheckListHistory] H
+      ON CL.UID = H.UID
+WHERE CL.MouldID = @MouldID 
+  AND CL.PMStatus = 6
+ORDER BY CL.TimeStamp DESC;
+
+    `;
+
+    const startResult = await pool.request()
+      .input("MouldID", sql.VarChar, mouldId)
+      .query(startQuery);
+
+    // ====================
+    // Query 2: PM Approved details
+    // ====================
+    const approvedQuery = `
+      ;WITH CTE AS (
+        SELECT
+       H.[MouldID],
+       H.[UserID] AS DoneBy,
+       MG.ParameterValue AS ApprovedByUserID,
+       CU.UserName AS ApprovedByUserName,
+       H.[PMStatus],
+	   H.CheckListName,
+       H.[Instance],
+	   H.AtMouldLife  AS 'PMShots',
+       H.[Remark],
+       H.[EndTime] AS ApprovedDate,
+       H.[PMDuration],
+	   H.StartTime AS 'PMStartDate',
+	   H.EndTime AS 'PMEndDate',
+	   CM.MouldName,
+	   MM.NextPMDue AS 'DueShots',
+	   MM.NextPMDueDate AS 'DueDate'
+FROM [dbo].[Mould_Executed_PMCheckListHistory] H
+LEFT JOIN Mould_Genealogy MG 
+       ON H.MouldID = MG.MouldID
+LEFT JOIN [PPMS_LILBawal].[dbo].[Config_User] CU 
+       ON MG.ParameterValue = CU.UserID   
+JOIN Config_Mould CM 
+      ON H.MouldID = CM.MouldID
+JOIN Mould_Monitoring MM 
+      ON H.MouldID = MM.MouldID
+WHERE H.MouldID = @MouldID
+  AND H.PMStatus = 7
+  AND MG.ParameterID = 7
+      )
+      SELECT 
+          CTE.*, 
+          CU.UserName AS 'DoneByUserName'
+      FROM CTE
+      LEFT JOIN Config_User CU 
+        ON CU.UserID = CTE.[DoneBy];
+    `;
+
+    const approvedResult = await pool.request()
+      .input("MouldID", sql.VarChar, mouldId)
+      .query(approvedQuery);
+
+    // ====================
+    // Response
+    // ====================
+    res.json({
+      pmStart: startResult.recordset || null,
+      pmApproved: approvedResult.recordset || null,
+    });
+
+  } catch (err) {
+    console.error("❌ Error fetching PM Approval data:", err);
+    res.status(500).json({ error: "Server error" });
+  }
 });
+
 //to check the user to get the user who's role is quality supervisor
 
 router.get("/Users", (request, response) => {

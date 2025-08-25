@@ -9,46 +9,150 @@ const { sql, config } = require('../databases/ssmsConn.js');
 const router = express.Router();
 
 //to show the checklist
-router.get("/HCChecklistForApproval", (request, response) => {
-    new sqlConnection.sql.Request().query(
-        `
- SELECT 
-    sch.UID,
-    sch.CheckListID,
-    chk.CheckListName,
-    sch.EquipmentID,
-    sch.MouldID,
-    mould.MouldName,
-    sch.HCFreqCount,
-    sch.HCFreqDays,
-    sch.HCWarningCount,
-    sch.HCWarningDays,
-    sch.MaterialID,
-    sch.Instance,
-    sch.HCStatus,
-    sch.LastUpdatedTime,
-    sch.LastUpdatedBy
-FROM 
-   Config_Mould_HCSchedule AS sch
-LEFT JOIN 
- Config_Mould_HCCheckList AS chk
-    ON sch.CheckListID = chk.CheckListID
-LEFT JOIN 
- Config_Mould AS mould
-    ON sch.MouldID = mould.MouldID
-    ORDER BY 
-    CASE 
-        WHEN sch.HCStatus IN (5) THEN 0  -- Pin rows with ItemID 3 to the top
-        ELSE 1
-    END  `,
-        (err, result) => {
-            if (err) {
-                middlewares.standardResponse(response, null, 300, "Error executing query: " + err);
-            } else {
-                middlewares.standardResponse(response, result.recordset, 200, "success");
-            }
-        }
-    );
+// router.get("/HCChecklistForApproval", (request, response) => {
+//     new sqlConnection.sql.Request().query(
+//         `
+//  SELECT 
+//     sch.UID,
+//     sch.CheckListID,
+//     chk.CheckListName,
+//     sch.EquipmentID,
+//     sch.MouldID,
+//     mould.MouldName,
+//     sch.HCFreqCount,
+//     sch.HCFreqDays,
+//     sch.HCWarningCount,
+//     sch.HCWarningDays,
+//     sch.MaterialID,
+//     sch.Instance,
+//     sch.HCStatus,
+//     sch.LastUpdatedTime,
+//     sch.LastUpdatedBy
+// FROM 
+//    Config_Mould_HCSchedule AS sch
+// LEFT JOIN 
+//  Config_Mould_HCCheckList AS chk
+//     ON sch.CheckListID = chk.CheckListID
+// LEFT JOIN 
+//  Config_Mould AS mould
+//     ON sch.MouldID = mould.MouldID
+//     ORDER BY 
+//     CASE 
+//         WHEN sch.HCStatus IN (5) THEN 0  -- Pin rows with ItemID 3 to the top
+//         ELSE 1
+//     END  `,
+//         (err, result) => {
+//             if (err) {
+//                 middlewares.standardResponse(response, null, 300, "Error executing query: " + err);
+//             } else {
+//                 middlewares.standardResponse(response, result.recordset, 200, "success");
+//             }
+//         }
+//     );
+// });
+
+router.get("/HC-approval/:mouldId", async (req, res) => {
+  const { mouldId } = req.params;
+
+  try {
+    const pool = await sql.connect(config);
+
+    // ====================
+    // Query 1: HC Start details (Waiting for approval)
+    // ====================
+    const startQuery = `
+     SELECT  
+      CL.[UID],
+      CL.[CheckListID],
+      CL.[CheckListName],
+      CL.[MouldID],
+      CM.MouldName,
+      MM.HealthCheckDue AS 'DueShots',
+      MM.NextHCDueDate AS 'DueDate',
+      CU.[UserName] AS 'DoneBy',
+      CL.[HCStatus],
+      CL.[AtMouldLife] AS 'HCShots',
+      CL.[Remark],
+      CL.[LastUpdatedTime] AS 'HCStartDate',
+      H.Instance
+FROM [dbo].[Mould_Execute_HCCheckList] CL
+JOIN Config_Mould CM 
+      ON CL.MouldID = CM.MouldID
+JOIN Mould_Monitoring MM 
+      ON CL.MouldID = MM.MouldID
+LEFT JOIN Config_User CU 
+      ON CL.UserID = CU.UserID
+LEFT JOIN [dbo].[Mould_Executed_HCCheckListHistory] H
+      ON CL.UID = H.UID
+WHERE CL.MouldID = @MouldID 
+  AND CL.HCStatus = 5
+ORDER BY CL.LastUpdatedTime DESC;
+
+    `;
+
+    const startResult = await pool.request()
+      .input("MouldID", sql.VarChar, mouldId)
+      .query(startQuery);
+
+    // ====================
+    // Query 2: HC Approved details
+    // ====================
+    const approvedQuery = `
+      ;WITH CTE AS (
+        SELECT
+       H.[MouldID],
+       H.[UserID] AS DoneBy,
+       MG.ParameterValue AS ApprovedByUserID,
+       CU.UserName AS ApprovedByUserName,
+       H.[HCStatus],
+     H.CheckListName,
+       H.[Instance],
+     H.AtMouldLife  AS 'HCShots',
+       H.[Remark],
+       H.[EndTime] AS ApprovedDate,
+       H.[HCDuration],
+     H.StartTime AS 'HCStartDate',
+     H.EndTime AS 'HCEndDate',
+     CM.MouldName,
+     MM.HealthCheckDue AS 'DueShots',
+     MM.NextHCDueDate AS 'DueDate'
+FROM [dbo].[Mould_Executed_HCCheckListHistory] H
+LEFT JOIN Mould_Genealogy MG 
+       ON H.MouldID = MG.MouldID
+LEFT JOIN [PPMS_LILBawal].[dbo].[Config_User] CU 
+       ON MG.ParameterValue = CU.UserID   
+JOIN Config_Mould CM 
+      ON H.MouldID = CM.MouldID
+JOIN Mould_Monitoring MM 
+      ON H.MouldID = MM.MouldID
+WHERE H.MouldID = @MouldID
+  AND H.HCStatus = 6
+  AND MG.ParameterID = 7
+      )
+      SELECT 
+          CTE.*, 
+          CU.UserName AS 'DoneByUserName'
+      FROM CTE
+      LEFT JOIN Config_User CU 
+        ON CU.UserID = CTE.[DoneBy];
+    `;
+
+    const approvedResult = await pool.request()
+      .input("MouldID", sql.VarChar, mouldId)
+      .query(approvedQuery);
+
+    // ====================
+    // Response
+    // ====================
+    res.json({
+      HCStart: startResult.recordset || null,
+      HCApproved: approvedResult.recordset || null,
+    });
+
+  } catch (err) {
+    console.error("❌ Error fetching PM Approval data:", err);
+    res.status(500).json({ error: "Server error" });
+  }
 });
 //to check the user to get the user who's role is quality supervisor
 
