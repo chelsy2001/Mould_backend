@@ -1,4 +1,5 @@
 const express = require("express");
+const cors = require("cors");
 const rateLimit = require("express-rate-limit");
 const middlewares = require("./src/middlewares/middlewares.js");
 const loginRoute = require("./src/controllers/loginAPI.js");
@@ -31,9 +32,15 @@ const limiter = rateLimit({
 });
 
 const app = express();
-
+app.use(cors({
+  origin: true, // Allow all origins
+  credentials: true, // Allow credentials
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+}));
 app.use(limiter);
 app.use(express.json());
+
 
 app.use("/api/login", loginRoute);
 app.use("/api/mould", mouldRoute);
