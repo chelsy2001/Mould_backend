@@ -92,6 +92,8 @@ router.post("/update", (request, response) => {
   );
 });
 
+const { execFile } = require("child_process");
+
 router.post("/updateValidationStatusLoad", (req, res) => {
   const { EquipmentID, mouldID } = req.body;
 
@@ -117,10 +119,95 @@ router.post("/updateValidationStatusLoad", (req, res) => {
       console.error("Error updating and logging ValidationStatus:", err);
       return middlewares.standardResponse(res, null, 500, "Database error");
     } else {
-      return middlewares.standardResponse(res, result.rowsAffected, 200, "ValidationStatus updated and log inserted successfully");
+      // exe path
+      const exePath = "D:\\ToshibaIntegrationTesting\\Application\\Write2Machine\\Debug\\Debug\\ToshibaLocal2Machines.exe";
+
+      //  required arguments
+      const validationStatus = "1";
+      const args = [EquipmentID, mouldID, validationStatus];
+
+      console.log(" Running EXE with args:", args.join(" "));
+
+      execFile(exePath, args, (error, stdout, stderr) => {
+        if (error) {
+          console.error("Error executing exe:", error);
+          return middlewares.standardResponse(res, null, 500, "EXE execution failed");
+        }
+
+        console.log("EXE Output:", stdout || stderr);
+
+        let exeResult = (stdout || stderr).trim();
+
+        // Log arguments clearly
+        console.log(`MachineID: ${EquipmentID}, MouldID: ${mouldID}, ValidationStatus: ${validationStatus}`);
+
+        if (exeResult.includes("ConfigurationFile")) {
+          return middlewares.standardResponse(
+            res,
+            {
+              dbUpdate: result.rowsAffected,
+              exeOutput: exeResult,
+              executedArgs: {
+                MachineID: EquipmentID,
+                MouldID: mouldID,
+                ValidationStatus: validationStatus
+              }
+            },
+            200,
+            "ValidationStatus updated, log inserted, and EXE executed successfully"
+          );
+        } else {
+          return middlewares.standardResponse(
+            res,
+            {
+              dbUpdate: result.rowsAffected,
+              exeOutput: exeResult,
+              executedArgs: {
+                Machine_Id : EquipmentID,
+                Mold_Id : mouldID,
+                Valid_Status: validationStatus
+              }
+            },
+            500,
+            "EXE executed but did not return expected success output"
+          );
+        }
+      });
     }
   });
 });
+
+// router.post("/updateValidationStatUnload", (req, res) => {
+//   const { EquipmentID, mouldID } = req.body;
+
+//   const updateAndInsertQuery = `
+//     BEGIN TRANSACTION;
+
+//     -- 1. Update the ValidationStatus
+//     UPDATE Mould_MachineMatrix
+//     SET ValidationStatus = 0,
+//         LastUpdatedTime = GETDATE(),
+//         LastUpdatedBy = 'system'
+//     WHERE EquipmentID = '${EquipmentID}' AND MouldID = '${mouldID}';
+
+//     -- 2. Insert into the Equipment Log
+//     INSERT INTO Mould_EquipmentLog (MouldID, EquipmentID, ValidationStatus, Timestamp)
+//     VALUES ('${mouldID}', '${EquipmentID}', 0, GETDATE());
+
+//     COMMIT;
+//   `;
+
+//   new sqlConnection.sql.Request().query(updateAndInsertQuery, (err, result) => {
+//     if (err) {
+//       console.error("Error updating and logging ValidationStatus:", err);
+//       return middlewares.standardResponse(res, null, 500, "Database error");
+//     } else {
+//       return middlewares.standardResponse(res, result.rowsAffected, 200, "ValidationStatus updated and log inserted successfully");
+//     }
+//   });
+// });
+
+
 router.post("/updateValidationStatUnload", (req, res) => {
   const { EquipmentID, mouldID } = req.body;
 
@@ -146,11 +233,63 @@ router.post("/updateValidationStatUnload", (req, res) => {
       console.error("Error updating and logging ValidationStatus:", err);
       return middlewares.standardResponse(res, null, 500, "Database error");
     } else {
-      return middlewares.standardResponse(res, result.rowsAffected, 200, "ValidationStatus updated and log inserted successfully");
+      //  exe path
+      const exePath = "D:\\ToshibaIntegrationTesting\\Application\\Write2Machine\\Debug\\Debug\\ToshibaLocal2Machines.exe";
+
+      // required arguments
+      const validationStatus = "0";
+      const args = [EquipmentID, mouldID, validationStatus];
+
+      console.log(" Running EXE with args:", args.join(" "));
+
+      execFile(exePath, args, (error, stdout, stderr) => {
+        if (error) {
+          console.error(" Error executing exe:", error);
+          return middlewares.standardResponse(res, null, 500, "EXE execution failed");
+        }
+
+        console.log("EXE Output:", stdout || stderr);
+
+        let exeResult = (stdout || stderr).trim();
+
+        // Log arguments clearly
+        console.log(`MachineID: ${EquipmentID}, MouldID: ${mouldID}, ValidationStatus: ${validationStatus}`);
+
+        if (exeResult.includes("ConfigurationFile")) {
+          return middlewares.standardResponse(
+            res,
+            {
+              dbUpdate: result.rowsAffected,
+              exeOutput: exeResult,
+              executedArgs: {
+                MachineID: EquipmentID,
+                MouldID: mouldID,
+                ValidationStatus: validationStatus
+              }
+            },
+            200,
+            "ValidationStatus updated, log inserted, and EXE executed successfully"
+          );
+        } else {
+          return middlewares.standardResponse(
+            res,
+            {
+              dbUpdate: result.rowsAffected,
+              exeOutput: exeResult,
+              executedArgs: {
+                Machine_Id : EquipmentID,
+                Mold_Id : mouldID,
+                Valid_Status: validationStatus
+              }
+            },
+            500,
+            "EXE executed but did not return expected success output"
+          );
+        }
+      });
     }
   });
 });
-
 
 router.post("/load", (request, response) => {
   console.log(moment().format("yyyy-MM-DD"));
