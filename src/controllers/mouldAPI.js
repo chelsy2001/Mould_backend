@@ -168,13 +168,18 @@ router.post("/load", (request, response) => {
       } else {
         if (parseInt(result.recordset[0].temp) > 0) {
           new sqlConnection.sql.Request().query(
-            `UPDATE Mould_Monitoring SET MouldStatus = ${request.body.MouldStatus}, LastUpdatedTime = GETDATE()
-            WHERE EquipmentID = \'${request.body.EquipmentID}\' AND MouldID = \'${request.body.MouldID}\';
-
-            INSERT INTO Mould_Genealogy VALUES (\'${request.body.MouldID}\',${request.body.CurrentMouldLife},${request.body.ParameterID},${request.body.ParameterValue},GETDATE());
-
-
-
+            `UPDATE M
+SET 
+    M.MouldStatus = ${request.body.MouldStatus},
+    M.LastUpdatedTime = GETDATE(),
+    M.MouldInstanceLife = D.Total_Shots,
+    M.MouldCurrentLife = D.Total_Shots
+FROM [PPMS_LILBawal].[dbo].[Mould_Monitoring] M
+INNER JOIN [ToshibaBinaryFileDb].[dbo].[Machine_Data] D
+    ON M.EquipmentID COLLATE SQL_Latin1_General_CP1_CI_AS = D.Machine_ID COLLATE SQL_Latin1_General_CP1_CI_AS
+   OR M.MouldID COLLATE SQL_Latin1_General_CP1_CI_AS = D.Mould_ID COLLATE SQL_Latin1_General_CP1_CI_AS
+WHERE EquipmentID = \'${request.body.EquipmentID}\' OR MouldID = \'${request.body.MouldID}\';
+  INSERT INTO Mould_Genealogy VALUES (\'${request.body.MouldID}\',${request.body.CurrentMouldLife},${request.body.ParameterID},${request.body.ParameterValue},GETDATE());
             UPDATE CONFIG_MOULD set MouldStatus = ${request.body.MouldStatus}, LastUpdatedTime = GETDATE() where MouldID = \'${request.body.MouldID}\';
             `,
             (err, result) => {
