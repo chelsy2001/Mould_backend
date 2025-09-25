@@ -57,42 +57,42 @@ ORDER BY CL.TimeStamp DESC;
     // ====================
     const approvedQuery = `
       ;WITH CTE AS (
-        SELECT
-       H.[MouldID],
-       H.[UserID] AS DoneBy,
-       MG.ParameterValue AS ApprovedByUserID,
-       CU.UserName AS ApprovedByUserName,
-       H.[PMStatus],
-	   H.CheckListName,
-       H.[Instance],
-	   H.AtMouldLife  AS 'PMShots',
-       H.[Remark],
-       H.[EndTime] AS ApprovedDate,
-       H.[PMDuration],
-	   H.StartTime AS 'PMStartDate',
-	   H.EndTime AS 'PMEndDate',
-	   CM.MouldName,
-	   MM.NextPMDue AS 'DueShots',
-	   MM.NextPMDueDate AS 'DueDate'
-FROM [dbo].[Mould_Executed_PMCheckListHistory] H
-LEFT JOIN Mould_Genealogy MG 
-       ON H.MouldID = MG.MouldID
-LEFT JOIN [PPMS_LILBawal].[dbo].[Config_User] CU 
-       ON MG.ParameterValue = CU.UserID   
-JOIN Config_Mould CM 
-      ON H.MouldID = CM.MouldID
-JOIN Mould_Monitoring MM 
-      ON H.MouldID = MM.MouldID
-WHERE H.MouldID = @MouldID
-  AND H.PMStatus = 7
-  AND MG.ParameterID = 7
-      )
-      SELECT 
-          CTE.*, 
-          CU.UserName AS 'DoneByUserName'
-      FROM CTE
-      LEFT JOIN Config_User CU 
-        ON CU.UserID = CTE.[DoneBy];
+    SELECT
+        H.[MouldID],
+        H.[UserID] AS DoneBy,
+        MG.ParameterValue AS ApprovedByUserID,
+        CU.UserName AS ApprovedByUserName,
+        H.[PMStatus],
+        H.CheckListName,
+        H.[Instance],
+        H.AtMouldLife  AS PMShots,
+        H.[Remark],
+        H.[EndTime] AS ApprovedDate,
+        H.[PMDuration],
+        H.StartTime AS PMStartDate,
+        H.EndTime AS PMEndDate,
+        CM.MouldName,
+        MM.NextPMDue AS DueShots,
+        MM.NextPMDueDate AS DueDate
+    FROM [dbo].[Mould_Executed_PMCheckListHistory] H
+    LEFT JOIN Mould_Genealogy MG 
+        ON H.MouldID = MG.MouldID AND MG.ParameterID = 7   -- ✅ put filter here
+    LEFT JOIN [PPMS_LILBawal].[dbo].[Config_User] CU 
+        ON CAST(MG.ParameterValue AS NVARCHAR(50)) = CAST(CU.UserID AS NVARCHAR(50)) -- ✅ fix datatype mismatch
+    JOIN Config_Mould CM 
+        ON H.MouldID = CM.MouldID
+    JOIN Mould_Monitoring MM 
+        ON H.MouldID = MM.MouldID
+    WHERE H.MouldID = @MouldID
+      AND H.PMStatus = 7
+)
+SELECT 
+    CTE.*, 
+    CU.UserName AS DoneByUserName
+FROM CTE
+LEFT JOIN Config_User CU 
+    ON CAST(CU.UserID AS NVARCHAR(50)) = CAST(CTE.DoneBy AS NVARCHAR(50)); -- ✅ safe join
+
     `;
 
     const approvedResult = await pool.request()
@@ -122,7 +122,7 @@ router.get("/Users", (request, response) => {
 FROM Config_User CU
 JOIN Config_Role CR
     ON CU.DepartmentRoleID = CR.RoleID
-WHERE CR.RoleName = 'Quality Supervisor';  `,
+WHERE CR.RoleName = 'Supervisor';  `,
         (err, result) => {
             if (err) {
                 middlewares.standardResponse(response, null, 300, "Error executing query: " + err);

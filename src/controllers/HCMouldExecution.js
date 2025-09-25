@@ -144,7 +144,7 @@ router.post('/SubmitHCChecklist', async (req, res) => {
     await new sqlConnection.sql.Request()
       .query(`
         UPDATE Config_Mould_HCSchedule
-        SET HCStatus = 5
+        SET HCStatus = 5 WHERE CheckListID = ${CheckListID} and MouldID='${MouldID}'
       `);
 
     // 5. Update Mould_Execute_PMCheckList PMStatus to 6

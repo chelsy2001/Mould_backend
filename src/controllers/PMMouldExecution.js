@@ -226,7 +226,7 @@ router.post('/SubmitPMChecklist', async (req, res) => {
     await new sqlConnection.sql.Request()
       .query(`
         UPDATE Config_Mould_PMSchedule
-        SET PMStatus = 6 
+        SET PMStatus = 6  WHERE CheckListID = ${CheckListID} And MouldID='${MouldID}'
       `);
 
     // 5. Update Mould_Execute_PMCheckList PMStatus to 6

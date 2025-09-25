@@ -97,46 +97,85 @@ ORDER BY CL.LastUpdatedTime DESC;
     // ====================
     // Query 2: HC Approved details
     // ====================
-    const approvedQuery = `
+//     const approvedQuery = `
+//       ;WITH CTE AS (
+//         SELECT
+//        H.[MouldID],
+//        H.[UserID] AS DoneBy,
+//        MG.ParameterValue AS ApprovedByUserID,
+//        CU.UserName AS ApprovedByUserName,
+//        H.[HCStatus],
+//      H.CheckListName,
+//        H.[Instance],
+//      H.AtMouldLife  AS 'HCShots',
+//        H.[Remark],
+//        H.[EndTime] AS ApprovedDate,
+//        H.[HCDuration],
+//      H.StartTime AS 'HCStartDate',
+//      H.EndTime AS 'HCEndDate',
+//      CM.MouldName,
+//      MM.HealthCheckDue AS 'DueShots',
+//      MM.NextHCDueDate AS 'DueDate'
+// FROM [dbo].[Mould_Executed_HCCheckListHistory] H
+// LEFT JOIN Mould_Genealogy MG 
+//        ON H.MouldID = MG.MouldID
+// LEFT JOIN [PPMS_LILBawal].[dbo].[Config_User] CU 
+//        ON MG.ParameterValue = CU.UserID   
+// JOIN Config_Mould CM 
+//       ON H.MouldID = CM.MouldID
+// JOIN Mould_Monitoring MM 
+//       ON H.MouldID = MM.MouldID
+// WHERE H.MouldID = @MouldID
+//   AND H.HCStatus = 6
+//   AND MG.ParameterID = 7
+//       )
+//       SELECT 
+//           CTE.*, 
+//           CU.UserName AS 'DoneByUserName'
+//       FROM CTE
+//       LEFT JOIN Config_User CU 
+//         ON CU.UserID = CTE.[DoneBy];
+//     `;
+const approvedQuery = `
       ;WITH CTE AS (
-        SELECT
-       H.[MouldID],
-       H.[UserID] AS DoneBy,
-       MG.ParameterValue AS ApprovedByUserID,
-       CU.UserName AS ApprovedByUserName,
-       H.[HCStatus],
-     H.CheckListName,
-       H.[Instance],
-     H.AtMouldLife  AS 'HCShots',
-       H.[Remark],
-       H.[EndTime] AS ApprovedDate,
-       H.[HCDuration],
-     H.StartTime AS 'HCStartDate',
-     H.EndTime AS 'HCEndDate',
-     CM.MouldName,
-     MM.HealthCheckDue AS 'DueShots',
-     MM.NextHCDueDate AS 'DueDate'
-FROM [dbo].[Mould_Executed_HCCheckListHistory] H
-LEFT JOIN Mould_Genealogy MG 
-       ON H.MouldID = MG.MouldID
-LEFT JOIN [PPMS_LILBawal].[dbo].[Config_User] CU 
-       ON MG.ParameterValue = CU.UserID   
-JOIN Config_Mould CM 
-      ON H.MouldID = CM.MouldID
-JOIN Mould_Monitoring MM 
-      ON H.MouldID = MM.MouldID
-WHERE H.MouldID = @MouldID
-  AND H.HCStatus = 6
-  AND MG.ParameterID = 7
-      )
-      SELECT 
-          CTE.*, 
-          CU.UserName AS 'DoneByUserName'
-      FROM CTE
-      LEFT JOIN Config_User CU 
-        ON CU.UserID = CTE.[DoneBy];
-    `;
+    SELECT
+        H.[MouldID],
+        H.[UserID] AS DoneBy,
+        MG.ParameterValue AS ApprovedByUserID,
+        CU.UserName AS ApprovedByUserName,
+        H.[HCStatus],
+        H.CheckListName,
+        H.[Instance],
+        H.AtMouldLife  AS HCShots,
+        H.[Remark],
+        H.[EndTime] AS ApprovedDate,
+        H.[HCDuration],
+        H.StartTime AS HCStartDate,
+        H.EndTime AS HCEndDate,
+        CM.MouldName,
+        MM.HealthCheckDue AS DueShots,
+        MM.NextHCDueDate AS DueDate
+    FROM [dbo].[Mould_Executed_HCCheckListHistory] H
+    LEFT JOIN Mould_Genealogy MG 
+        ON H.MouldID = MG.MouldID AND MG.ParameterID = 7
+    LEFT JOIN [PPMS_LILBawal].[dbo].[Config_User] CU 
+        ON MG.ParameterValue = CAST(CU.UserID AS NVARCHAR(50))   -- ✅ FIXED
+    JOIN Config_Mould CM 
+        ON H.MouldID = CM.MouldID
+    JOIN Mould_Monitoring MM 
+        ON H.MouldID = MM.MouldID
+    WHERE H.MouldID = @MouldID
+      AND H.HCStatus = 6
+)
+SELECT 
+    CTE.*, 
+    CU.UserName AS DoneByUserName
+FROM CTE
+LEFT JOIN Config_User CU 
+    ON CTE.DoneBy = CAST(CU.UserID AS NVARCHAR(50)); -- ✅ FIXED
 
+
+    `;
     const approvedResult = await pool.request()
       .input("MouldID", sql.VarChar, mouldId)
       .query(approvedQuery);
@@ -163,7 +202,7 @@ SELECT CU.UserName
 FROM Config_User CU
 JOIN Config_Role CR
     ON CU.DepartmentRoleID = CR.RoleID
-WHERE CR.RoleName = 'Quality Supervisor';  `,
+WHERE CR.RoleName = 'Supervisor';  `,
         (err, result) => {
             if (err) {
                 middlewares.standardResponse(response, null, 300, "Error executing query: " + err);
