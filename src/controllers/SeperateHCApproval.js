@@ -137,29 +137,30 @@ ORDER BY CL.LastUpdatedTime DESC;
 //         ON CU.UserID = CTE.[DoneBy];
 //     `;
 const approvedQuery = `
-      ;WITH CTE AS (
+    ;WITH CTE AS (
     SELECT
         H.[MouldID],
         H.[UserID] AS DoneBy,
         MG.ParameterValue AS ApprovedByUserID,
         CU.UserName AS ApprovedByUserName,
-        H.[HCStatus],
+        H.HCStatus,
         H.CheckListName,
         H.[Instance],
-        H.AtMouldLife  AS HCShots,
+        H.AtMouldLife  AS PMShots,
         H.[Remark],
         H.[EndTime] AS ApprovedDate,
         H.[HCDuration],
-        H.StartTime AS HCStartDate,
-        H.EndTime AS HCEndDate,
+        H.StartTime AS PMStartDate,
+        H.EndTime AS PMEndDate,
         CM.MouldName,
         MM.HealthCheckDue AS DueShots,
         MM.NextHCDueDate AS DueDate
     FROM [dbo].[Mould_Executed_HCCheckListHistory] H
     LEFT JOIN Mould_Genealogy MG 
-        ON H.MouldID = MG.MouldID AND MG.ParameterID = 7
-    LEFT JOIN [PPMS_LILBawal].[dbo].[Config_User] CU 
-        ON MG.ParameterValue = CAST(CU.UserID AS NVARCHAR(50))   -- ✅ FIXED
+        ON H.MouldID = MG.MouldID 
+           AND MG.ParameterID = 7   -- ✅ safe: null allow karega
+    LEFT JOIN Config_User CU 
+        ON TRY_CAST(MG.ParameterValue AS NVARCHAR(50)) = CU.UserID  -- ✅ safe conversion
     JOIN Config_Mould CM 
         ON H.MouldID = CM.MouldID
     JOIN Mould_Monitoring MM 
@@ -169,12 +170,10 @@ const approvedQuery = `
 )
 SELECT 
     CTE.*, 
-    CU.UserName AS DoneByUserName
+    U.UserName AS DoneByUserName
 FROM CTE
-LEFT JOIN Config_User CU 
-    ON CTE.DoneBy = CAST(CU.UserID AS NVARCHAR(50)); -- ✅ FIXED
-
-
+LEFT JOIN Config_User U 
+    ON TRY_CAST(CTE.DoneBy AS NVARCHAR(50)) = U.UserID;
     `;
     const approvedResult = await pool.request()
       .input("MouldID", sql.VarChar, mouldId)

@@ -76,9 +76,10 @@ ORDER BY CL.TimeStamp DESC;
         MM.NextPMDueDate AS DueDate
     FROM [dbo].[Mould_Executed_PMCheckListHistory] H
     LEFT JOIN Mould_Genealogy MG 
-        ON H.MouldID = MG.MouldID AND MG.ParameterID = 7   -- ✅ put filter here
-    LEFT JOIN [PPMS_LILBawal].[dbo].[Config_User] CU 
-        ON CAST(MG.ParameterValue AS NVARCHAR(50)) = CAST(CU.UserID AS NVARCHAR(50)) -- ✅ fix datatype mismatch
+        ON H.MouldID = MG.MouldID 
+           AND MG.ParameterID = 7   -- ✅ safe: null allow karega
+    LEFT JOIN Config_User CU 
+        ON TRY_CAST(MG.ParameterValue AS NVARCHAR(50)) = CU.UserID  -- ✅ safe conversion
     JOIN Config_Mould CM 
         ON H.MouldID = CM.MouldID
     JOIN Mould_Monitoring MM 
@@ -88,10 +89,10 @@ ORDER BY CL.TimeStamp DESC;
 )
 SELECT 
     CTE.*, 
-    CU.UserName AS DoneByUserName
+    U.UserName AS DoneByUserName
 FROM CTE
-LEFT JOIN Config_User CU 
-    ON CAST(CU.UserID AS NVARCHAR(50)) = CAST(CTE.DoneBy AS NVARCHAR(50)); -- ✅ safe join
+LEFT JOIN Config_User U 
+    ON TRY_CAST(CTE.DoneBy AS NVARCHAR(50)) = U.UserID;
 
     `;
 
