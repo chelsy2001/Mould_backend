@@ -123,7 +123,7 @@ router.get("/Users", (request, response) => {
 FROM Config_User CU
 JOIN Config_Role CR
     ON CU.DepartmentRoleID = CR.RoleID
-WHERE CR.RoleName = 'Supervisor';  `,
+WHERE CR.RoleName = 'QualitySupervisor';  `,
         (err, result) => {
             if (err) {
                 middlewares.standardResponse(response, null, 300, "Error executing query: " + err);
@@ -165,76 +165,36 @@ router.post("/login", (req, res) => {
     );
 });
 
-//to approve the checklists
-
-// router.post("/ApproveChecklist", (req, res) => {
-//     const { checklistID } = req.body;
-
-//     if (!checklistID) {
-//         return middlewares.standardResponse(res, null, 400, "ChecklistID is required");
-//     }
-
-//     const sql = require('mssql');
-//     const db = new sql.ConnectionPool(sqlConnection.sqlConfig);
-
-//     db.connect().then(pool => {
-//         // Step 1: Get MouldID from checklistID
-//         return pool.request()
-//             .input('CheckListID', sql.NVarChar(50), checklistID)
-//             .query(`
-//                 SELECT TOP 1 MouldID 
-//                 FROM [PPMS_Solution].[dbo].[Mould_Execute_PMCheckList] 
-//                 WHERE CheckListID = @CheckListID
-//             `);
-//     }).then(result => {
-//         if (result.recordset.length === 0) {
-//             throw new Error("MouldID not found for provided ChecklistID");
-//         }
-
-//         const mouldID = result.recordset[0].MouldID;
-
-//         // Step 2: Execute Stored Procedure
-//         return db.request()
-//             .input('MouldID', sql.NVarChar(50), mouldID)
-//             .execute('PM_ExecutionDataMovemnetToHistory');
-//     }).then(() => {
-//         middlewares.standardResponse(res, null, 200, "Checklist approved and data moved to history");
-//     }).catch(err => {
-//         console.error(err);
-//         middlewares.standardResponse(res, null, 500, "Server Error: " + err.message);
-//     });
-// });
-
 // Approve Checklist and Move Data to History
 router.post("/ApproveChecklist", async (req, res) => {
-    const { CheckListID } = req.body;
+    const { CheckListID, UserName } = req.body;
 
-    if (!CheckListID) {
-        return middlewares.standardResponse(res, null, 400, "ChecklistID is required");
+    if (!CheckListID || !UserName) {
+        return middlewares.standardResponse(res, null, 400, "ChecklistID and UserName are required");
     }
 
     try {
         await sql.connect(config);
 
+        // Step 1: Get MouldID
         const request = new sql.Request();
-        request.input('CheckListID', sqlConnection.sql.Int, CheckListID);
-
-        // Step 1: Get MouldID from checklistID
+        request.input('CheckListID', sql.Int, CheckListID);
         const result = await request.query(`
-      SELECT TOP 1 MouldID 
-      FROM Mould_Execute_PMCheckList 
-      WHERE CheckListID = @CheckListID
-    `);
+            SELECT TOP 1 MouldID 
+            FROM Mould_Execute_PMCheckList 
+            WHERE CheckListID = @CheckListID
+        `);
 
         if (result.recordset.length === 0) {
-            return middlewares.standardResponse(res, null, 404, "MouldID not found for 353 provided ChecklistID");
+            return middlewares.standardResponse(res, null, 404, "MouldID not found for provided ChecklistID");
         }
 
         const mouldID = result.recordset[0].MouldID;
 
-        // Step 2: Execute stored procedure
+        // Step 2: Call stored procedure with BOTH params
         const procRequest = new sql.Request();
         procRequest.input('MouldID', sql.NVarChar(50), mouldID);
+        procRequest.input('UserName', sql.NVarChar(50), UserName);  // 👈 yeh add karo
         await procRequest.execute('PM_ExecutionDataMovemnetToHistory');
 
         return middlewares.standardResponse(res, null, 200, "Checklist approved and data moved to history");
@@ -243,6 +203,7 @@ router.post("/ApproveChecklist", async (req, res) => {
         return middlewares.standardResponse(res, null, 500, "Internal server error: " + err.message);
     }
 });
+
 
 //get checkpoints in checkpoint screen
 router.get('/GetCheckPoints/:CheckListID', (request, response) => {

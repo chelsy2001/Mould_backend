@@ -8,49 +8,6 @@ const { sql, config } = require('../databases/ssmsConn.js');
 
 const router = express.Router();
 
-//to show the checklist
-// router.get("/HCChecklistForApproval", (request, response) => {
-//     new sqlConnection.sql.Request().query(
-//         `
-//  SELECT 
-//     sch.UID,
-//     sch.CheckListID,
-//     chk.CheckListName,
-//     sch.EquipmentID,
-//     sch.MouldID,
-//     mould.MouldName,
-//     sch.HCFreqCount,
-//     sch.HCFreqDays,
-//     sch.HCWarningCount,
-//     sch.HCWarningDays,
-//     sch.MaterialID,
-//     sch.Instance,
-//     sch.HCStatus,
-//     sch.LastUpdatedTime,
-//     sch.LastUpdatedBy
-// FROM 
-//    Config_Mould_HCSchedule AS sch
-// LEFT JOIN 
-//  Config_Mould_HCCheckList AS chk
-//     ON sch.CheckListID = chk.CheckListID
-// LEFT JOIN 
-//  Config_Mould AS mould
-//     ON sch.MouldID = mould.MouldID
-//     ORDER BY 
-//     CASE 
-//         WHEN sch.HCStatus IN (5) THEN 0  -- Pin rows with ItemID 3 to the top
-//         ELSE 1
-//     END  `,
-//         (err, result) => {
-//             if (err) {
-//                 middlewares.standardResponse(response, null, 300, "Error executing query: " + err);
-//             } else {
-//                 middlewares.standardResponse(response, result.recordset, 200, "success");
-//             }
-//         }
-//     );
-// });
-
 router.get("/HC-approval/:mouldId", async (req, res) => {
   const { mouldId } = req.params;
 
@@ -93,74 +50,31 @@ ORDER BY CL.LastUpdatedTime DESC;
     const startResult = await pool.request()
       .input("MouldID", sql.VarChar, mouldId)
       .query(startQuery);
-
-    // ====================
-    // Query 2: HC Approved details
-    // ====================
-//     const approvedQuery = `
-//       ;WITH CTE AS (
-//         SELECT
-//        H.[MouldID],
-//        H.[UserID] AS DoneBy,
-//        MG.ParameterValue AS ApprovedByUserID,
-//        CU.UserName AS ApprovedByUserName,
-//        H.[HCStatus],
-//      H.CheckListName,
-//        H.[Instance],
-//      H.AtMouldLife  AS 'HCShots',
-//        H.[Remark],
-//        H.[EndTime] AS ApprovedDate,
-//        H.[HCDuration],
-//      H.StartTime AS 'HCStartDate',
-//      H.EndTime AS 'HCEndDate',
-//      CM.MouldName,
-//      MM.HealthCheckDue AS 'DueShots',
-//      MM.NextHCDueDate AS 'DueDate'
-// FROM [dbo].[Mould_Executed_HCCheckListHistory] H
-// LEFT JOIN Mould_Genealogy MG 
-//        ON H.MouldID = MG.MouldID
-// LEFT JOIN [PPMS_LILBawal].[dbo].[Config_User] CU 
-//        ON MG.ParameterValue = CU.UserID   
-// JOIN Config_Mould CM 
-//       ON H.MouldID = CM.MouldID
-// JOIN Mould_Monitoring MM 
-//       ON H.MouldID = MM.MouldID
-// WHERE H.MouldID = @MouldID
-//   AND H.HCStatus = 6
-//   AND MG.ParameterID = 7
-//       )
-//       SELECT 
-//           CTE.*, 
-//           CU.UserName AS 'DoneByUserName'
-//       FROM CTE
-//       LEFT JOIN Config_User CU 
-//         ON CU.UserID = CTE.[DoneBy];
-//     `;
 const approvedQuery = `
     ;WITH CTE AS (
     SELECT
         H.[MouldID],
         H.[UserID] AS DoneBy,
         MG.ParameterValue AS ApprovedByUserID,
-        CU.UserName AS ApprovedByUserName,
+        CU.UserName AS ApprovedByUserName,   -- ✅ approver name
         H.HCStatus,
         H.CheckListName,
         H.[Instance],
-        H.AtMouldLife  AS PMShots,
+        H.AtMouldLife  AS HCShots,
         H.[Remark],
         H.[EndTime] AS ApprovedDate,
         H.[HCDuration],
-        H.StartTime AS PMStartDate,
-        H.EndTime AS PMEndDate,
+        H.StartTime AS HCStartDate,
+        H.EndTime AS HCEndDate,
         CM.MouldName,
         MM.HealthCheckDue AS DueShots,
         MM.NextHCDueDate AS DueDate
     FROM [dbo].[Mould_Executed_HCCheckListHistory] H
     LEFT JOIN Mould_Genealogy MG 
         ON H.MouldID = MG.MouldID 
-           AND MG.ParameterID = 7   -- ✅ safe: null allow karega
+           AND MG.ParameterID = 8    -- approver user stored
     LEFT JOIN Config_User CU 
-        ON TRY_CAST(MG.ParameterValue AS NVARCHAR(50)) = CU.UserID  -- ✅ safe conversion
+        ON TRY_CAST(MG.ParameterValue AS NVARCHAR(50)) = CU.UserID
     JOIN Config_Mould CM 
         ON H.MouldID = CM.MouldID
     JOIN Mould_Monitoring MM 
@@ -169,11 +83,12 @@ const approvedQuery = `
       AND H.HCStatus = 6
 )
 SELECT 
-    CTE.*, 
-    U.UserName AS DoneByUserName
+    CTE.*,
+    U.UserName AS DoneByUserName   -- ✅ person who performed HC
 FROM CTE
 LEFT JOIN Config_User U 
     ON TRY_CAST(CTE.DoneBy AS NVARCHAR(50)) = U.UserID;
+
     `;
     const approvedResult = await pool.request()
       .input("MouldID", sql.VarChar, mouldId)
@@ -201,7 +116,7 @@ SELECT CU.UserName
 FROM Config_User CU
 JOIN Config_Role CR
     ON CU.DepartmentRoleID = CR.RoleID
-WHERE CR.RoleName = 'Supervisor';  `,
+WHERE CR.RoleName = 'QualitySupervisor';  `,
         (err, result) => {
             if (err) {
                 middlewares.standardResponse(response, null, 300, "Error executing query: " + err);
@@ -285,9 +200,9 @@ router.post("/login", (req, res) => {
 
 // Approve Checklist and Move Data to History
 router.post("/ApproveChecklist", async (req, res) => {
-    const { CheckListID } = req.body;
+    const { CheckListID ,UserName} = req.body;
 
-    if (!CheckListID) {
+    if (!CheckListID || !UserName) {
         return middlewares.standardResponse(res, null, 400, "ChecklistID is required");
     }
 
@@ -313,6 +228,7 @@ router.post("/ApproveChecklist", async (req, res) => {
         // Step 2: Execute stored procedure
         const procRequest = new sql.Request();
         procRequest.input('MouldID', sql.NVarChar(50), mouldID);
+         procRequest.input('UserName', sql.NVarChar(50), UserName); 
         await procRequest.execute('[dbo].[HC_ExecutionDataMovemnetToHistory]');
 
         return middlewares.standardResponse(res, null, 200, "Checklist approved and data moved to history");
