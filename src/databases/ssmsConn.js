@@ -2,9 +2,9 @@ const sql = require("mssql");
 
 // SQL Server configuration
 var config = {
- user: "Bajaj", // Database username
-  password: "Bajaj@123", // Database password
-  server: "DESKTOP-URBGBGQ", // Server IP address
+ user: "sa", // Database username
+  password: "root", // Database password
+  server: "DESKTOP-T266BV5", // Server IP address
   database: "PPMS_LILBawal",
   options: {
     encrypt: false, // Disable encryption

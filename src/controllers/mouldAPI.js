@@ -2,6 +2,8 @@ const express = require("express");
 const sqlConnection = require("../databases/ssmsConn");
 const middlewares = require("../middlewares/middlewares.js");
 const moment = require("moment");
+const axios = require("axios");
+const base64 = require("base-64");
 
 const router = express.Router();
 
@@ -94,202 +96,266 @@ router.post("/update", (request, response) => {
 
 const { execFile } = require("child_process");
 
-router.post("/updateValidationStatusLoad", (req, res) => {
+
+router.post("/updateValidationStatusLoad", async (req, res) => {
   const { EquipmentID, mouldID } = req.body;
 
-  const updateAndInsertQuery = `
-    BEGIN TRANSACTION;
+  // 1️⃣ Validate request fields
+  if (!EquipmentID || !mouldID) {
+    return middlewares.standardResponse(res, null, 400, "Missing required fields");
+  }
 
-    -- 1. Update the ValidationStatus
-    UPDATE Mould_MachineMatrix
-    SET ValidationStatus = 1,
-        LastUpdatedTime = GETDATE(),
-        LastUpdatedBy = 'system'
-    WHERE EquipmentID = '${EquipmentID}' AND MouldID = '${mouldID}';
+  try {
+    const request = new sqlConnection.sql.Request();
 
-    -- 2. Insert into the Equipment Log
-    INSERT INTO Mould_EquipmentLog (MouldID, EquipmentID, ValidationStatus, Timestamp)
-    VALUES ('${mouldID}', '${EquipmentID}', 1, GETDATE());
+    // 2️⃣ Get StationID from DB based on EquipmentID
+    const equipmentQuery = `
+      SELECT TOP 1 StationID
+      FROM Config_Equipment
+      WHERE EquipmentID = @EquipmentID
+    `;
+    request.input("EquipmentID", sqlConnection.sql.NVarChar, EquipmentID);
+    const equipmentResult = await request.query(equipmentQuery);
 
-    COMMIT;
-  `;
-
-  new sqlConnection.sql.Request().query(updateAndInsertQuery, (err, result) => {
-    if (err) {
-      console.error("Error updating and logging ValidationStatus:", err);
-      return middlewares.standardResponse(res, null, 500, "Database error");
-    } else {
-      // exe path
-      const exePath = "D:\\ToshibaIntegrationTesting\\Application\\Write2Machine\\Debug\\Debug\\ToshibaLocal2Machines.exe";
-
-      //  required arguments
-      const validationStatus = "1";
-      const args = [EquipmentID, mouldID, validationStatus];
-
-      console.log(" Running EXE with args:", args.join(" "));
-
-      execFile(exePath, args, (error, stdout, stderr) => {
-        if (error) {
-          console.error("Error executing exe:", error);
-          return middlewares.standardResponse(res, null, 500, "EXE execution failed");
-        }
-
-        console.log("EXE Output:", stdout || stderr);
-
-        let exeResult = (stdout || stderr).trim();
-
-        // Log arguments clearly
-        console.log(`MachineID: ${EquipmentID}, MouldID: ${mouldID}, ValidationStatus: ${validationStatus}`);
-
-        if (exeResult.includes("ConfigurationFile")) {
-          return middlewares.standardResponse(
-            res,
-            {
-              dbUpdate: result.rowsAffected,
-              exeOutput: exeResult,
-              executedArgs: {
-                MachineID: EquipmentID,
-                MouldID: mouldID,
-                ValidationStatus: validationStatus
-              }
-            },
-            200,
-            "ValidationStatus updated, log inserted, and EXE executed successfully"
-          );
-        } else {
-          return middlewares.standardResponse(
-            res,
-            {
-              dbUpdate: result.rowsAffected,
-              exeOutput: exeResult,
-              executedArgs: {
-                Machine_Id : EquipmentID,
-                Mold_Id : mouldID,
-                Valid_Status: validationStatus
-              }
-            },
-            500,
-            "EXE executed but did not return expected success output"
-          );
-        }
-      });
+    if (!equipmentResult.recordset.length) {
+      return middlewares.standardResponse(res, null, 404, `EquipmentID not found in DB: ${EquipmentID}`);
     }
-  });
+
+    const StationID = equipmentResult.recordset[0].StationID;
+
+    // 3️⃣ Map StationID → Machine Tag
+    const stationTagMap = {
+      "1": "ac:PPMS_SolutionLIL/ScadaToPLC/Machine-1/ValidationStatus",
+      "2": "ac:PPMS_SolutionLIL/ScadaToPLC/Machine-2/ValidationStatus",
+      "3": "ac:PPMS_SolutionLIL/ScadaToPLC/Machine-3/ValidationStatus",
+      "4": "ac:PPMS_SolutionLIL/ScadaToPLC/Machine-4/ValidationStatus",
+      "5": "ac:PPMS_SolutionLIL/ScadaToPLC/Machine-5/ValidationStatus",
+      "6": "ac:PPMS_SolutionLIL/ScadaToPLC/Machine-6/ValidationStatus",
+      "7": "ac:PPMS_SolutionLIL/ScadaToPLC/Machine-7/ValidationStatus",
+      "8": "ac:PPMS_SolutionLIL/ScadaToPLC/Machine-8/ValidationStatus",
+      "9": "ac:PPMS_SolutionLIL/ScadaToPLC/Machine-9/ValidationStatus",
+      "10": "ac:PPMS_SolutionLIL/ScadaToPLC/Machine-10/ValidationStatus",
+    };
+
+    const machineTag = stationTagMap[StationID];
+    if (!machineTag) {
+      return middlewares.standardResponse(res, null, 400, `No tag found for StationID: ${StationID}`);
+    }
+
+    // 4️⃣ Update DB ValidationStatus + insert log
+    const updateAndInsertQuery = `
+      BEGIN TRANSACTION;
+        UPDATE Mould_MachineMatrix
+        SET ValidationStatus = 1,
+            LastUpdatedTime = GETDATE(),
+            LastUpdatedBy = 'system'
+        WHERE EquipmentID = @EquipmentID AND MouldID = @MouldID;
+
+        INSERT INTO Mould_EquipmentLog (MouldID, EquipmentID, ValidationStatus, Timestamp)
+        VALUES (@MouldID, @EquipmentID, 1, GETDATE());
+      COMMIT;
+    `;
+
+    const updateRequest = new sqlConnection.sql.Request();
+    updateRequest.input("EquipmentID", sqlConnection.sql.NVarChar, EquipmentID);
+    updateRequest.input("MouldID", sqlConnection.sql.NVarChar, mouldID);
+    const dbResult = await updateRequest.query(updateAndInsertQuery);
+    console.log("✅ Database updated successfully");
+
+    // 5️⃣ Execute Binary File
+    const exePath = "D:\\ToshibaIntegrationTesting\\Application\\Write2Machine\\Debug\\Debug\\ToshibaLocal2Machines.exe";
+    const validationStatus = "1";
+    const exeArgs = [EquipmentID, mouldID, validationStatus];
+
+    const runExe = () =>
+      new Promise((resolve, reject) => {
+        execFile(exePath, exeArgs, (error, stdout, stderr) => {
+          if (error) return reject(stderr || error.message);
+          resolve(stdout || stderr);
+        });
+      });
+
+    const exeOutput = await runExe();
+    console.log("✅ EXE executed successfully:", exeOutput);
+
+    // 6️⃣ Send Tag Update to Machine API
+    const timestamp = new Date().toISOString();
+    const payload = [
+      {
+        pointName: machineTag,
+        timestamp,
+        quality: 9,
+        value: 1,
+      },
+    ];
+
+    const username = "Chelsy";
+    const password = "Dalisoft@123";
+    const credentials = base64.encode(`${username}:${password}`);
+
+    const apiResponse = await axios.post(
+      "http://DESKTOP-T266BV5/ODataConnector/rest/RealtimeData/Write",
+      payload,
+      {
+        headers: {
+          Authorization: `Basic ${credentials}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    return middlewares.standardResponse(
+      res,
+      {
+        dbUpdate: dbResult.rowsAffected,
+        exeOutput,
+        apiPayload: payload,
+        apiResponse: apiResponse.data,
+      },
+      200,
+      "ValidationStatus updated, binary executed, and tag updated successfully"
+    );
+  } catch (err) {
+    console.error("❌ Error in process:", err);
+    return middlewares.standardResponse(
+      res,
+      { error: err.message },
+      500,
+      "Error occurred while updating ValidationStatus or machine tag"
+    );
+  }
 });
 
-// router.post("/updateValidationStatUnload", (req, res) => {
-//   const { EquipmentID, mouldID } = req.body;
 
-//   const updateAndInsertQuery = `
-//     BEGIN TRANSACTION;
-
-//     -- 1. Update the ValidationStatus
-//     UPDATE Mould_MachineMatrix
-//     SET ValidationStatus = 0,
-//         LastUpdatedTime = GETDATE(),
-//         LastUpdatedBy = 'system'
-//     WHERE EquipmentID = '${EquipmentID}' AND MouldID = '${mouldID}';
-
-//     -- 2. Insert into the Equipment Log
-//     INSERT INTO Mould_EquipmentLog (MouldID, EquipmentID, ValidationStatus, Timestamp)
-//     VALUES ('${mouldID}', '${EquipmentID}', 0, GETDATE());
-
-//     COMMIT;
-//   `;
-
-//   new sqlConnection.sql.Request().query(updateAndInsertQuery, (err, result) => {
-//     if (err) {
-//       console.error("Error updating and logging ValidationStatus:", err);
-//       return middlewares.standardResponse(res, null, 500, "Database error");
-//     } else {
-//       return middlewares.standardResponse(res, result.rowsAffected, 200, "ValidationStatus updated and log inserted successfully");
-//     }
-//   });
-// });
-
-
-router.post("/updateValidationStatUnload", (req, res) => {
+router.post("/updateValidationStatUnload", async (req, res) => {
   const { EquipmentID, mouldID } = req.body;
 
-  const updateAndInsertQuery = `
-    BEGIN TRANSACTION;
+  // 1️⃣ Validate fields
+  if (!EquipmentID || !mouldID) {
+    return middlewares.standardResponse(res, null, 400, "Missing required fields");
+  }
 
-    -- 1. Update the ValidationStatus
-    UPDATE Mould_MachineMatrix
-    SET ValidationStatus = 0,
-        LastUpdatedTime = GETDATE(),
-        LastUpdatedBy = 'system'
-    WHERE EquipmentID = '${EquipmentID}' AND MouldID = '${mouldID}';
+  try {
+    const request = new sqlConnection.sql.Request();
 
-    -- 2. Insert into the Equipment Log
-    INSERT INTO Mould_EquipmentLog (MouldID, EquipmentID, ValidationStatus, Timestamp)
-    VALUES ('${mouldID}', '${EquipmentID}', 0, GETDATE());
+    // 2️⃣ Get StationID from DB based on EquipmentID
+    const equipmentQuery = `
+      SELECT TOP 1 StationID
+      FROM Config_Equipment
+      WHERE EquipmentID = @EquipmentID
+    `;
+    request.input("EquipmentID", sqlConnection.sql.NVarChar, EquipmentID);
+    const equipmentResult = await request.query(equipmentQuery);
 
-    COMMIT;
-  `;
-
-  new sqlConnection.sql.Request().query(updateAndInsertQuery, (err, result) => {
-    if (err) {
-      console.error("Error updating and logging ValidationStatus:", err);
-      return middlewares.standardResponse(res, null, 500, "Database error");
-    } else {
-      //  exe path
-      const exePath = "D:\\ToshibaIntegrationTesting\\Application\\Write2Machine\\Debug\\Debug\\ToshibaLocal2Machines.exe";
-
-      // required arguments
-      const validationStatus = "0";
-      const args = [EquipmentID, mouldID, validationStatus];
-
-      console.log(" Running EXE with args:", args.join(" "));
-
-      execFile(exePath, args, (error, stdout, stderr) => {
-        if (error) {
-          console.error(" Error executing exe:", error);
-          return middlewares.standardResponse(res, null, 500, "EXE execution failed");
-        }
-
-        console.log("EXE Output:", stdout || stderr);
-
-        let exeResult = (stdout || stderr).trim();
-
-        // Log arguments clearly
-        console.log(`MachineID: ${EquipmentID}, MouldID: ${mouldID}, ValidationStatus: ${validationStatus}`);
-
-        if (exeResult.includes("ConfigurationFile")) {
-          return middlewares.standardResponse(
-            res,
-            {
-              dbUpdate: result.rowsAffected,
-              exeOutput: exeResult,
-              executedArgs: {
-                MachineID: EquipmentID,
-                MouldID: mouldID,
-                ValidationStatus: validationStatus
-              }
-            },
-            200,
-            "ValidationStatus updated, log inserted, and EXE executed successfully"
-          );
-        } else {
-          return middlewares.standardResponse(
-            res,
-            {
-              dbUpdate: result.rowsAffected,
-              exeOutput: exeResult,
-              executedArgs: {
-                Machine_Id : EquipmentID,
-                Mold_Id : mouldID,
-                Valid_Status: validationStatus
-              }
-            },
-            500,
-            "EXE executed but did not return expected success output"
-          );
-        }
-      });
+    if (!equipmentResult.recordset.length) {
+      return middlewares.standardResponse(res, null, 404, `EquipmentID not found in DB: ${EquipmentID}`);
     }
-  });
+
+    const StationID = equipmentResult.recordset[0].StationID;
+
+   // 3️⃣ Map StationID → Machine Tag
+    const stationTagMap = {
+      "1": "ac:PPMS_SolutionLIL/ScadaToPLC/Machine-1/ValidationStatus",
+      "2": "ac:PPMS_SolutionLIL/ScadaToPLC/Machine-2/ValidationStatus",
+      "3": "ac:PPMS_SolutionLIL/ScadaToPLC/Machine-3/ValidationStatus",
+      "4": "ac:PPMS_SolutionLIL/ScadaToPLC/Machine-4/ValidationStatus",
+      "5": "ac:PPMS_SolutionLIL/ScadaToPLC/Machine-5/ValidationStatus",
+      "6": "ac:PPMS_SolutionLIL/ScadaToPLC/Machine-6/ValidationStatus",
+      "7": "ac:PPMS_SolutionLIL/ScadaToPLC/Machine-7/ValidationStatus",
+      "8": "ac:PPMS_SolutionLIL/ScadaToPLC/Machine-8/ValidationStatus",
+      "9": "ac:PPMS_SolutionLIL/ScadaToPLC/Machine-9/ValidationStatus",
+      "10": "ac:PPMS_SolutionLIL/ScadaToPLC/Machine-10/ValidationStatus",
+    };
+
+    const machineTag = stationTagMap[StationID];
+    if (!machineTag) {
+      return middlewares.standardResponse(res, null, 400, `No tag found for StationID: ${StationID}`);
+    }
+
+    // 4️⃣ Update DB ValidationStatus to 0 + insert log
+    const updateAndInsertQuery = `
+      BEGIN TRANSACTION;
+        UPDATE Mould_MachineMatrix
+        SET ValidationStatus = 0,
+            LastUpdatedTime = GETDATE(),
+            LastUpdatedBy = 'system'
+        WHERE EquipmentID = @EquipmentID AND MouldID = @MouldID;
+
+        INSERT INTO Mould_EquipmentLog (MouldID, EquipmentID, ValidationStatus, Timestamp)
+        VALUES (@MouldID, @EquipmentID, 0, GETDATE());
+      COMMIT;
+    `;
+
+    const updateRequest = new sqlConnection.sql.Request();
+    updateRequest.input("EquipmentID", sqlConnection.sql.NVarChar, EquipmentID);
+    updateRequest.input("MouldID", sqlConnection.sql.NVarChar, mouldID);
+    const dbResult = await updateRequest.query(updateAndInsertQuery);
+    console.log("✅ Database updated successfully (ValidationStatus = 0)");
+
+    // 5️⃣ Execute Binary File (.exe)
+    const exePath = "D:\\ToshibaIntegrationTesting\\Application\\Write2Machine\\Debug\\Debug\\ToshibaLocal2Machines.exe";
+    const validationStatus = "0";
+    const exeArgs = [EquipmentID, mouldID, validationStatus];
+
+    const runExe = () =>
+      new Promise((resolve, reject) => {
+        execFile(exePath, exeArgs, (error, stdout, stderr) => {
+          if (error) return reject(stderr || error.message);
+          resolve(stdout || stderr);
+        });
+      });
+
+    const exeOutput = await runExe();
+    console.log("✅ EXE executed successfully:", exeOutput);
+
+    // 6️⃣ Send Tag Update to Machine API
+    const timestamp = new Date().toISOString();
+    const payload = [
+      {
+        pointName: machineTag,
+        timestamp,
+        quality: 9,
+        value: 0, // ValidationStatus = 0
+      },
+    ];
+
+    const username = "Chelsy";
+    const password = "Dalisoft@123";
+    const credentials = base64.encode(`${username}:${password}`);
+
+    const apiResponse = await axios.post(
+      "http://DESKTOP-T266BV5/ODataConnector/rest/RealtimeData/Write",
+      payload,
+      {
+        headers: {
+          Authorization: `Basic ${credentials}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    return middlewares.standardResponse(
+      res,
+      {
+        dbUpdate: dbResult.rowsAffected,
+        exeOutput,
+        apiPayload: payload,
+        apiResponse: apiResponse.data,
+      },
+      200,
+      "ValidationStatus unloaded, binary executed, and tag updated successfully"
+    );
+  } catch (err) {
+    console.error("❌ Error in unloading process:", err);
+    return middlewares.standardResponse(
+      res,
+      { error: err.message },
+      500,
+      "Error occurred while unloading ValidationStatus or updating machine tag"
+    );
+  }
 });
+
 
 router.post("/load", (request, response) => {
   console.log(moment().format("yyyy-MM-DD"));
@@ -632,6 +698,7 @@ router.get("/activebreakdown/:mouldId", async (req, res) => {
     res.status(500).json({ status: 500, message: "Server error" });
   }
 });
+
 
 
 
