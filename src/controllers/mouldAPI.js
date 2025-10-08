@@ -100,7 +100,6 @@ const { execFile } = require("child_process");
 router.post("/updateValidationStatusLoad", async (req, res) => {
   const { EquipmentID, mouldID } = req.body;
 
-  // 1️⃣ Validate request fields
   if (!EquipmentID || !mouldID) {
     return middlewares.standardResponse(res, null, 400, "Missing required fields");
   }
@@ -108,14 +107,11 @@ router.post("/updateValidationStatusLoad", async (req, res) => {
   try {
     const request = new sqlConnection.sql.Request();
 
-    // 2️⃣ Get StationID from DB based on EquipmentID
-    const equipmentQuery = `
-      SELECT TOP 1 StationID
-      FROM Config_Equipment
-      WHERE EquipmentID = @EquipmentID
-    `;
+    // 1️⃣ Get StationID from Config_Equipment
     request.input("EquipmentID", sqlConnection.sql.NVarChar, EquipmentID);
-    const equipmentResult = await request.query(equipmentQuery);
+    const equipmentResult = await request.query(`
+      SELECT TOP 1 StationID FROM Config_Equipment WHERE EquipmentID = @EquipmentID
+    `);
 
     if (!equipmentResult.recordset.length) {
       return middlewares.standardResponse(res, null, 404, `EquipmentID not found in DB: ${EquipmentID}`);
@@ -123,7 +119,33 @@ router.post("/updateValidationStatusLoad", async (req, res) => {
 
     const StationID = equipmentResult.recordset[0].StationID;
 
-    // 3️⃣ Map StationID → Machine Tag
+    // 2️⃣ Get ProdDate & ProdShift from Prod_ShiftInformation
+    const prodShiftResult = await new sqlConnection.sql.Request()
+      .input("StationID", sqlConnection.sql.Int, StationID)
+      .query(`
+        SELECT TOP 1 ProdDate, ShiftName
+        FROM Prod_ShiftInformation
+        WHERE StationID = @StationID
+        ORDER BY ProdDate DESC
+      `);
+
+    const ProdDate = prodShiftResult.recordset[0]?.ProdDate || null;
+    const ProdShift = prodShiftResult.recordset[0]?.ShiftName || null;
+
+    // 3️⃣ Get AtMouldLife from Mould_Monitoring
+    const mouldLifeResult = await new sqlConnection.sql.Request()
+      .input("MouldID", sqlConnection.sql.NVarChar, mouldID)
+      .input("EquipmentID", sqlConnection.sql.NVarChar, EquipmentID)
+      .query(`
+        SELECT TOP 1 MouldActualLife
+        FROM Mould_Monitoring
+        WHERE MouldID = @MouldID AND EquipmentID = @EquipmentID
+        ORDER BY UID DESC
+      `);
+
+    const AtMouldLife = mouldLifeResult.recordset[0]?.MouldActualLife || 0;
+
+    // 4️⃣ Map StationID → Machine Tag
     const stationTagMap = {
       "1": "ac:PPMS_SolutionLIL/ScadaToPLC/Machine-1/ValidationStatus",
       "2": "ac:PPMS_SolutionLIL/ScadaToPLC/Machine-2/ValidationStatus",
@@ -142,7 +164,7 @@ router.post("/updateValidationStatusLoad", async (req, res) => {
       return middlewares.standardResponse(res, null, 400, `No tag found for StationID: ${StationID}`);
     }
 
-    // 4️⃣ Update DB ValidationStatus + insert log
+    // 5️⃣ Update Mould_MachineMatrix & Insert into Mould_EquipmentLog
     const updateAndInsertQuery = `
       BEGIN TRANSACTION;
         UPDATE Mould_MachineMatrix
@@ -151,18 +173,23 @@ router.post("/updateValidationStatusLoad", async (req, res) => {
             LastUpdatedBy = 'system'
         WHERE EquipmentID = @EquipmentID AND MouldID = @MouldID;
 
-        INSERT INTO Mould_EquipmentLog (MouldID, EquipmentID, ValidationStatus, Timestamp)
-        VALUES (@MouldID, @EquipmentID, 1, GETDATE());
+        INSERT INTO Mould_EquipmentLog
+        (MouldID, EquipmentID, ValidationStatus, ProdDate, ProdShift, AtMouldLife, Timestamp)
+        VALUES (@MouldID, @EquipmentID, 1, @ProdDate, @ProdShift, @AtMouldLife, GETDATE());
       COMMIT;
     `;
 
     const updateRequest = new sqlConnection.sql.Request();
     updateRequest.input("EquipmentID", sqlConnection.sql.NVarChar, EquipmentID);
     updateRequest.input("MouldID", sqlConnection.sql.NVarChar, mouldID);
+    updateRequest.input("ProdDate", sqlConnection.sql.Date, ProdDate);
+    updateRequest.input("ProdShift", sqlConnection.sql.NVarChar, ProdShift);
+    updateRequest.input("AtMouldLife", sqlConnection.sql.Int, AtMouldLife);
+
     const dbResult = await updateRequest.query(updateAndInsertQuery);
     console.log("✅ Database updated successfully");
 
-    // 5️⃣ Execute Binary File
+    // 6️⃣ Execute Binary File
     const exePath = "D:\\ToshibaIntegrationTesting\\Application\\Write2Machine\\Debug\\Debug\\ToshibaLocal2Machines.exe";
     const validationStatus = "1";
     const exeArgs = [EquipmentID, mouldID, validationStatus];
@@ -178,59 +205,35 @@ router.post("/updateValidationStatusLoad", async (req, res) => {
     const exeOutput = await runExe();
     console.log("✅ EXE executed successfully:", exeOutput);
 
-    // 6️⃣ Send Tag Update to Machine API
+    // 7️⃣ Send Tag Update to Machine API
     const timestamp = new Date().toISOString();
-    const payload = [
-      {
-        pointName: machineTag,
-        timestamp,
-        quality: 9,
-        value: 1,
-      },
-    ];
-
-    const username = "Chelsy";
-    const password = "Dalisoft@123";
-    const credentials = base64.encode(`${username}:${password}`);
+    const payload = [{ pointName: machineTag, timestamp, quality: 9, value: 1 }];
+    const credentials = base64.encode("Chelsy:Dalisoft@123");
 
     const apiResponse = await axios.post(
       "http://DESKTOP-T266BV5/ODataConnector/rest/RealtimeData/Write",
       payload,
-      {
-        headers: {
-          Authorization: `Basic ${credentials}`,
-          "Content-Type": "application/json",
-        },
-      }
+      { headers: { Authorization: `Basic ${credentials}`, "Content-Type": "application/json" } }
     );
 
     return middlewares.standardResponse(
       res,
-      {
-        dbUpdate: dbResult.rowsAffected,
-        exeOutput,
-        apiPayload: payload,
-        apiResponse: apiResponse.data,
-      },
+      { dbUpdate: dbResult.rowsAffected, exeOutput, apiPayload: payload, apiResponse: apiResponse.data },
       200,
       "ValidationStatus updated, binary executed, and tag updated successfully"
     );
+
   } catch (err) {
     console.error("❌ Error in process:", err);
-    return middlewares.standardResponse(
-      res,
-      { error: err.message },
-      500,
-      "Error occurred while updating ValidationStatus or machine tag"
-    );
+    return middlewares.standardResponse(res, { error: err.message }, 500, "Error occurred while updating ValidationStatus or machine tag");
   }
 });
+
 
 
 router.post("/updateValidationStatUnload", async (req, res) => {
   const { EquipmentID, mouldID } = req.body;
 
-  // 1️⃣ Validate fields
   if (!EquipmentID || !mouldID) {
     return middlewares.standardResponse(res, null, 400, "Missing required fields");
   }
@@ -238,14 +241,11 @@ router.post("/updateValidationStatUnload", async (req, res) => {
   try {
     const request = new sqlConnection.sql.Request();
 
-    // 2️⃣ Get StationID from DB based on EquipmentID
-    const equipmentQuery = `
-      SELECT TOP 1 StationID
-      FROM Config_Equipment
-      WHERE EquipmentID = @EquipmentID
-    `;
+    // 1️⃣ Get StationID from Config_Equipment
     request.input("EquipmentID", sqlConnection.sql.NVarChar, EquipmentID);
-    const equipmentResult = await request.query(equipmentQuery);
+    const equipmentResult = await request.query(`
+      SELECT TOP 1 StationID FROM Config_Equipment WHERE EquipmentID = @EquipmentID
+    `);
 
     if (!equipmentResult.recordset.length) {
       return middlewares.standardResponse(res, null, 404, `EquipmentID not found in DB: ${EquipmentID}`);
@@ -253,7 +253,33 @@ router.post("/updateValidationStatUnload", async (req, res) => {
 
     const StationID = equipmentResult.recordset[0].StationID;
 
-   // 3️⃣ Map StationID → Machine Tag
+    // 2️⃣ Get ProdDate & ProdShift from Prod_ShiftInformation
+    const prodShiftResult = await new sqlConnection.sql.Request()
+      .input("StationID", sqlConnection.sql.Int, StationID)
+      .query(`
+        SELECT TOP 1 ProdDate, ShiftName
+        FROM Prod_ShiftInformation
+        WHERE StationID = @StationID
+        ORDER BY ProdDate DESC
+      `);
+
+    const ProdDate = prodShiftResult.recordset[0]?.ProdDate || null;
+    const ProdShift = prodShiftResult.recordset[0]?.ShiftName || null;
+
+    // 3️⃣ Get AtMouldLife from Mould_Monitoring
+    const mouldLifeResult = await new sqlConnection.sql.Request()
+      .input("MouldID", sqlConnection.sql.NVarChar, mouldID)
+      .input("EquipmentID", sqlConnection.sql.NVarChar, EquipmentID)
+      .query(`
+        SELECT TOP 1 MouldActualLife
+        FROM Mould_Monitoring
+        WHERE MouldID = @MouldID AND EquipmentID = @EquipmentID
+        ORDER BY UID DESC
+      `);
+
+    const AtMouldLife = mouldLifeResult.recordset[0]?.MouldActualLife || 0;
+
+    // 4️⃣ Map StationID → Machine Tag
     const stationTagMap = {
       "1": "ac:PPMS_SolutionLIL/ScadaToPLC/Machine-1/ValidationStatus",
       "2": "ac:PPMS_SolutionLIL/ScadaToPLC/Machine-2/ValidationStatus",
@@ -272,7 +298,7 @@ router.post("/updateValidationStatUnload", async (req, res) => {
       return middlewares.standardResponse(res, null, 400, `No tag found for StationID: ${StationID}`);
     }
 
-    // 4️⃣ Update DB ValidationStatus to 0 + insert log
+    // 5️⃣ Update Mould_MachineMatrix & Insert into Mould_EquipmentLog (ValidationStatus = 0)
     const updateAndInsertQuery = `
       BEGIN TRANSACTION;
         UPDATE Mould_MachineMatrix
@@ -281,18 +307,23 @@ router.post("/updateValidationStatUnload", async (req, res) => {
             LastUpdatedBy = 'system'
         WHERE EquipmentID = @EquipmentID AND MouldID = @MouldID;
 
-        INSERT INTO Mould_EquipmentLog (MouldID, EquipmentID, ValidationStatus, Timestamp)
-        VALUES (@MouldID, @EquipmentID, 0, GETDATE());
+        INSERT INTO Mould_EquipmentLog
+        (MouldID, EquipmentID, ValidationStatus, ProdDate, ProdShift, AtMouldLife, Timestamp)
+        VALUES (@MouldID, @EquipmentID, 0, @ProdDate, @ProdShift, @AtMouldLife, GETDATE());
       COMMIT;
     `;
 
     const updateRequest = new sqlConnection.sql.Request();
     updateRequest.input("EquipmentID", sqlConnection.sql.NVarChar, EquipmentID);
     updateRequest.input("MouldID", sqlConnection.sql.NVarChar, mouldID);
+    updateRequest.input("ProdDate", sqlConnection.sql.Date, ProdDate);
+    updateRequest.input("ProdShift", sqlConnection.sql.NVarChar, ProdShift);
+    updateRequest.input("AtMouldLife", sqlConnection.sql.Int, AtMouldLife);
+
     const dbResult = await updateRequest.query(updateAndInsertQuery);
     console.log("✅ Database updated successfully (ValidationStatus = 0)");
 
-    // 5️⃣ Execute Binary File (.exe)
+    // 6️⃣ Execute Binary File
     const exePath = "D:\\ToshibaIntegrationTesting\\Application\\Write2Machine\\Debug\\Debug\\ToshibaLocal2Machines.exe";
     const validationStatus = "0";
     const exeArgs = [EquipmentID, mouldID, validationStatus];
@@ -308,53 +339,30 @@ router.post("/updateValidationStatUnload", async (req, res) => {
     const exeOutput = await runExe();
     console.log("✅ EXE executed successfully:", exeOutput);
 
-    // 6️⃣ Send Tag Update to Machine API
+    // 7️⃣ Send Tag Update to Machine API
     const timestamp = new Date().toISOString();
-    const payload = [
-      {
-        pointName: machineTag,
-        timestamp,
-        quality: 9,
-        value: 0, // ValidationStatus = 0
-      },
-    ];
-
-    const username = "Chelsy";
-    const password = "Dalisoft@123";
-    const credentials = base64.encode(`${username}:${password}`);
+    const payload = [{ pointName: machineTag, timestamp, quality: 9, value: 0 }];
+    const credentials = base64.encode("Chelsy:Dalisoft@123");
 
     const apiResponse = await axios.post(
       "http://DESKTOP-T266BV5/ODataConnector/rest/RealtimeData/Write",
       payload,
-      {
-        headers: {
-          Authorization: `Basic ${credentials}`,
-          "Content-Type": "application/json",
-        },
-      }
+      { headers: { Authorization: `Basic ${credentials}`, "Content-Type": "application/json" } }
     );
 
     return middlewares.standardResponse(
       res,
-      {
-        dbUpdate: dbResult.rowsAffected,
-        exeOutput,
-        apiPayload: payload,
-        apiResponse: apiResponse.data,
-      },
+      { dbUpdate: dbResult.rowsAffected, exeOutput, apiPayload: payload, apiResponse: apiResponse.data },
       200,
       "ValidationStatus unloaded, binary executed, and tag updated successfully"
     );
+
   } catch (err) {
     console.error("❌ Error in unloading process:", err);
-    return middlewares.standardResponse(
-      res,
-      { error: err.message },
-      500,
-      "Error occurred while unloading ValidationStatus or updating machine tag"
-    );
+    return middlewares.standardResponse(res, { error: err.message }, 500, "Error occurred while unloading ValidationStatus or updating machine tag");
   }
 });
+
 
 
 router.post("/load", (request, response) => {
