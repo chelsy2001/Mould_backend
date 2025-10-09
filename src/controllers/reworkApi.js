@@ -16,7 +16,7 @@ router.get('/ReworkGenelogy/:EquipmentID', (request, response) => {
   }
 
   const query = `
-    SELECT 
+   SELECT 
       RG.UID,
       RG.EquipmentID,
       CE.EquipmentName,
@@ -26,11 +26,14 @@ router.get('/ReworkGenelogy/:EquipmentID', (request, response) => {
       RG.ProdShift,
       RG.NOKQuantity,
       RG.Reason,
-      RG.Remark
+      RG.Remark,
+	  MM.MouldID,
+	  MM.MouldName
     FROM [Rework_Genealogy] RG
     LEFT JOIN [Config_User] CU ON RG.UserID = CU.UserID
     LEFT JOIN [Config_Equipment] CE ON RG.EquipmentID = CE.EquipmentID
-    WHERE RG.EquipmentID = @EquipmentID
+    LEFT JOIN [Mould_MachineMatrix] MM ON RG.EquipmentID = MM.EquipmentID 
+    WHERE RG.EquipmentID = @EquipmentID AND MM.validationStatus = 1
     ORDER BY RG.UID DESC
   `;
 
@@ -117,19 +120,126 @@ router.get('/ReworkGenelogy/:EquipmentID', (request, response) => {
 });
 
 //Update API
-// POST /rework/update-rework
-router.post('/update-rework-cycle-summary', async (req, res) => {
-  const { EquipmentName, UserName, ProdDate, ProdShift, NOTOKQuantity, ReworkReason, Remark } = req.body;
+// // POST /rework/update-rework
+// router.post('/update-rework-cycle-summary', async (req, res) => {
+//   const { EquipmentName, MouldName,UserName, ProdDate, ProdShift, NOTOKQuantity, ReworkReason, Remark } = req.body;
 
-  if (!EquipmentName || !UserName || !ProdDate || !ProdShift || !NOTOKQuantity || !ReworkReason) {
+//   if (!EquipmentName ||!MouldName || !UserName || !ProdDate || !ProdShift || !NOTOKQuantity || !ReworkReason) {
+//     return middlewares.standardResponse(res, null, 400, "Missing required parameters");
+//   }
+
+//   try {
+//     // Connect to SQL
+//     await sqlConnection.sql.connect(config);
+
+//     // Step 1: Get EquipmentID and StationID from EquipmentName
+//     const equipResult = await new sqlConnection.sql.Request()
+//       .input('EquipmentName', sqlConnection.sql.NVarChar, EquipmentName)
+//       .query(`
+//         SELECT EquipmentID, StationID 
+//         FROM [PPMS_LILBawal].[dbo].[Config_Equipment] 
+//         WHERE EquipmentName = @EquipmentName
+//       `);
+
+//     if (equipResult.recordset.length === 0) {
+//       return middlewares.standardResponse(res, null, 404, "Equipment not found");
+//     }
+
+//     const { EquipmentID, StationID } = equipResult.recordset[0];
+
+//     // Step 2: Call stored procedure to update rework
+//     await new sqlConnection.sql.Request()
+//       .input('EquipmentID', sqlConnection.sql.Int, EquipmentID)
+//       .input('UserID', sqlConnection.sql.NVarChar, UserName)
+//       .input('ProdDate', sqlConnection.sql.Date, ProdDate)
+//       .input('ProdShift', sqlConnection.sql.NVarChar(10), ProdShift)
+//       .input('NOTOKQuantity', sqlConnection.sql.Int, NOTOKQuantity)
+//       .input('ReworkReason', sqlConnection.sql.NVarChar(255), ReworkReason)
+//       .input('Remark', sqlConnection.sql.NVarChar(1000), Remark)
+//       .input('MouldName', sqlConnection.sql.NVarChar(255), MouldName)
+//       .execute('RejectedUpdateWithReworkGenealogy');
+
+//     // Step 3: Fetch latest CycleSummary
+//     const cycleResult = await new sqlConnection.sql.Request()
+//       .input('ProdDate', sqlConnection.sql.Date, ProdDate)
+//       .input('ProdShift', sqlConnection.sql.VarChar, ProdShift)
+//       .input('StationID', sqlConnection.sql.Int, StationID)
+//       .query(`
+//         SELECT TOP 1 
+//           TotalCount, 
+//           GoodPart, 
+//           RejectedCount
+//         FROM [PPMS_LILBawal].[dbo].[Perf_CycleTime]
+//         WHERE ProdDate = @ProdDate 
+//           AND ProdShift = @ProdShift 
+//           AND StationID = @StationID
+//         ORDER BY [Timestamp] DESC
+//       `);
+
+//     return middlewares.standardResponse(
+//       res,
+//       cycleResult.recordset[0] || {},
+//       200,
+//       "Rework updated and cycle summary fetched successfully"
+//     );
+
+//   } catch (error) {
+//     console.error('Error in update-rework-cycle-summary:', error);
+//     return middlewares.standardResponse(res, null, 500, "Internal server error: " + error.message);
+//   }
+// });
+
+// 📁 routes/mouldRoutes.js
+router.get("/getValidatedMoulds/:EquipmentName", async (req, res) => {
+  const { EquipmentName } = req.params;
+
+  if (!EquipmentName) {
+    return middlewares.standardResponse(res, null, 400, "Missing EquipmentName parameter");
+  }
+
+  try {
+    const request = new sqlConnection.sql.Request();
+
+    // ✅ SQL Query: fetch moulds for that EquipmentName where ValidationStatus = 1 or 4 and MLossID = 5
+    const query = `
+      SELECT 
+          [UID],
+          [EquipmentName],
+          [EquipmentID],
+          [MouldName],
+          [MouldID]
+      FROM [PPMS_LILBawal].[dbo].[Mould_MachineMatrix]
+      WHERE EquipmentName = @EquipmentName
+        AND ValidationStatus = 1
+      ORDER BY MouldName;
+    `;
+
+    request.input("EquipmentName", sqlConnection.sql.NVarChar, EquipmentName);
+
+    const result = await request.query(query);
+
+    middlewares.standardResponse(res, result.recordset, 200, "Validated moulds fetched successfully");
+  } catch (err) {
+    console.error("❌ Error fetching validated moulds:", err);
+    middlewares.standardResponse(res, null, 500, "Error executing query: " + err.message);
+  }
+});
+
+
+// 📁 routes/reworkRoutes.js
+
+router.post('/update-rework-cycle-summary', async (req, res) => {
+  const { EquipmentName, MouldName, UserName, ProdDate, ProdShift, NOTOKQuantity, ReworkReason, Remark } = req.body;
+
+  // 1️⃣ Validate required fields
+  if (!EquipmentName || !MouldName || !UserName || !ProdDate || !ProdShift || !NOTOKQuantity || !ReworkReason) {
     return middlewares.standardResponse(res, null, 400, "Missing required parameters");
   }
 
   try {
-    // Connect to SQL
     await sqlConnection.sql.connect(config);
 
-    // Step 1: Get EquipmentID and StationID from EquipmentName
+    // 2️⃣ Get EquipmentID & StationID from EquipmentName
     const equipResult = await new sqlConnection.sql.Request()
       .input('EquipmentName', sqlConnection.sql.NVarChar, EquipmentName)
       .query(`
@@ -144,18 +254,35 @@ router.post('/update-rework-cycle-summary', async (req, res) => {
 
     const { EquipmentID, StationID } = equipResult.recordset[0];
 
-    // Step 2: Call stored procedure to update rework
+    // 3️⃣ Get MouldID from Mould_MachineMatrix
+    const mouldResult = await new sqlConnection.sql.Request()
+      .input('EquipmentID', sqlConnection.sql.NVarChar, EquipmentID)
+      .input('MouldName', sqlConnection.sql.NVarChar, MouldName)
+      .query(`
+        SELECT TOP 1 MouldID 
+        FROM [PPMS_LILBawal].[dbo].[Mould_MachineMatrix]
+        WHERE EquipmentID = @EquipmentID AND MouldName = @MouldName
+      `);
+
+    if (mouldResult.recordset.length === 0) {
+      return middlewares.standardResponse(res, null, 404, "Mould not found for this equipment");
+    }
+
+    const { MouldID } = mouldResult.recordset[0];
+
+    // 4️⃣ Call Stored Procedure for Update
     await new sqlConnection.sql.Request()
-      .input('EquipmentID', sqlConnection.sql.Int, EquipmentID)
+      .input('EquipmentID', sqlConnection.sql.NVarChar, EquipmentID)
       .input('UserID', sqlConnection.sql.NVarChar, UserName)
       .input('ProdDate', sqlConnection.sql.Date, ProdDate)
       .input('ProdShift', sqlConnection.sql.NVarChar(10), ProdShift)
       .input('NOTOKQuantity', sqlConnection.sql.Int, NOTOKQuantity)
-      .input('ReworkReason', sqlConnection.sql.NVarChar(255), ReworkReason)
-      .input('Remark', sqlConnection.sql.NVarChar(1000), Remark)
+      .input('ReworkReason', sqlConnection.sql.NVarChar(200), ReworkReason)
+      .input('Remark', sqlConnection.sql.NVarChar(200), Remark)
+      .input('MouldID', sqlConnection.sql.NVarChar(100), MouldID)
       .execute('RejectedUpdateWithReworkGenealogy');
 
-    // Step 3: Fetch latest CycleSummary
+    // 5️⃣ Fetch updated cycle summary
     const cycleResult = await new sqlConnection.sql.Request()
       .input('ProdDate', sqlConnection.sql.Date, ProdDate)
       .input('ProdShift', sqlConnection.sql.VarChar, ProdShift)
@@ -176,16 +303,14 @@ router.post('/update-rework-cycle-summary', async (req, res) => {
       res,
       cycleResult.recordset[0] || {},
       200,
-      "Rework updated and cycle summary fetched successfully"
+      "Rework update successful and cycle summary fetched"
     );
 
   } catch (error) {
-    console.error('Error in update-rework-cycle-summary:', error);
+    console.error("❌ Error in update-rework-cycle-summary:", error);
     return middlewares.standardResponse(res, null, 500, "Internal server error: " + error.message);
   }
 });
-
-
 
 module.exports = router;
 
