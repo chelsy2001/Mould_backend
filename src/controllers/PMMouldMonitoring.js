@@ -57,63 +57,59 @@ LEFT JOIN
 });
 
 
-// router.post("/upload-image-to-checklist/:checklistID", upload.single("image"), async (req, res) => {
-//   const { checklistID } = req.params;
-//   const file = req.file;
+router.post("/upload-image-to-checklist/:checklistID", upload.single("image"), async (req, res) => {
+  const { checklistID } = req.params;
+  const file = req.file;
 
-//   if (!file) {
-//     return middlewares.standardResponse(res, null, 400, "❌ No image file uploaded.");
-//   }
+  if (!file) {
+    return middlewares.standardResponse(res, null, 400, "❌ No image file uploaded.");
+  }
 
-//   try {
-//     // Save image to folder
-//     const timestamp = new Date().toISOString().replace(/[-:T.]/g, "_").slice(0, 19);
-//     const uploadDir = path.join(__dirname, "../uploads/PMchecklist");
+  try {
+    const uploadDir = path.join(__dirname, "../uploads/PMCheckList");
+    if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 
-//     // Ensure the folder exists
-//     if (!fs.existsSync(uploadDir)) {
-//       fs.mkdirSync(uploadDir, { recursive: true });
-//     }
+    const timestamp = new Date().toISOString().replace(/[-:T.]/g, "_").slice(0, 19);
+    const fileName = `Checklist${checklistID}_${timestamp}.jpg`;
+    const filePath = path.join(uploadDir, fileName);
 
-//     // File path: uploads/PMcheckpoints/ChecklistID_timestamp.jpg
-//     const fileName = `Checklist${checklistID}_${timestamp}.jpg`;
-//     const filePath = path.join(uploadDir, fileName);
+    fs.writeFileSync(filePath, file.buffer);
 
-//     fs.writeFileSync(filePath, file.buffer);
+    const pool = await sqlConnection.sql.connect();
 
-//     // Connect to DB
-//     const pool = await sqlConnection.sql.connect();
-//     const request = pool.request();
+    // ✅ Create a request object BEFORE using it
+    const selectRequest = pool.request();
+    selectRequest.input("ChecklistID", sqlConnection.sql.Int, checklistID);
 
-//     // Step 1: Get MouldID from Config_Mould_PMCheckList
-//     request.input("ChecklistID", sqlConnection.sql.Int, checklistID);
-//     const result = await request.query(`
-//       SELECT MouldID FROM [dbo].[Config_Mould_PMCheckList]
-//       WHERE CheckListID = @ChecklistID
-//     `);
+    const result = await selectRequest.query(`
+      SELECT MouldID FROM [dbo].[Config_Mould_PMCheckList]
+      WHERE CheckListID = @ChecklistID
+    `);
 
-//     if (!result.recordset.length) {
-//       return middlewares.standardResponse(res, null, 404, "❌ ChecklistID not found.");
-//     }
+    if (!result.recordset.length) {
+      return middlewares.standardResponse(res, null, 404, "❌ ChecklistID not found.");
+    }
 
-//     const mouldID = result.recordset[0].MouldID;
+    const mouldID = result.recordset[0].MouldID;
 
-//     // Step 2: Insert image into Mould_Images table
-//     const insertRequest = pool.request();
-//     insertRequest.input("MouldID", sqlConnection.sql.Int, mouldID);
-//     insertRequest.input("Image", sqlConnection.sql.VarBinary(sqlConnection.sql.MAX), file.buffer);
-//     insertRequest.input("Timestamp", sqlConnection.sql.DateTime, new Date());
-//     insertRequest.input("ParameterID", sqlConnection.sql.Int, 3);
+    // ✅ New request for insert
+    const insertRequest = pool.request();
+    insertRequest.input("ChecklistID", sqlConnection.sql.Int, checklistID);
+    insertRequest.input("Image", sqlConnection.sql.VarBinary(sqlConnection.sql.MAX), file.buffer);
+    insertRequest.input("Timestamp", sqlConnection.sql.DateTime, new Date());
 
-//     await insertRequest.query(`
-//       INSERT INTO [dbo].[Mould_Images] (MouldID, Image, Timestamp, ParameterID)
-//       VALUES (@MouldID, @Image, @Timestamp, @ParameterID)
-//     `);
+    await insertRequest.query(`
+      INSERT INTO [dbo].[Mould_Checklist_Images] (ChecklistID, Image, Timestamp)
+      VALUES (@ChecklistID, @Image, @Timestamp)
+    `);
 
-//     middlewares.standardResponse(res, null, 200, "✅ Image uploaded and saved to folder and database.");
-//   } catch (error) {
-//     console.error("❌ Upload error:", error);
-//     middlewares.standardResponse(res, null, 500, "❌ Failed to upload image.");
-//   }
-// });
+    middlewares.standardResponse(res, null, 200, "✅ Image uploaded and saved successfully.");
+
+  } catch (error) {
+    console.error("❌ Upload error:", error);
+    middlewares.standardResponse(res, null, 500, "❌ Failed to upload image.");
+  }
+});
+
+
 module.exports = router;
