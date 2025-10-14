@@ -221,4 +221,51 @@ router.post("/upload-image-to-checkpoint/:checklistID/:checkpointID", upload.sin
   }
 });
 
+router.post(
+  "/upload-image-to-checkpoint/:checklistID/:checkpointID",
+  upload.single("image"),
+  async (req, res) => {
+    const { checklistID, checkpointID } = req.params;
+    const file = req.file;
+
+    if (!file) {
+      return middlewares.standardResponse(res, null, 400, "❌ No image uploaded.");
+    }
+
+    try {
+      // 1️⃣ Save physical copy in PMcheckpoints folder
+      const uploadDir = path.join(__dirname, "../uploads/HCcheckpoints");
+      if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+
+      const timestamp = new Date().toISOString().replace(/[-:T.]/g, "_").slice(0, 19);
+      const fileName = `Checklist${checklistID}_Checkpoint${checkpointID}_${timestamp}.jpg`;
+      const filePath = path.join(uploadDir, fileName);
+
+      fs.writeFileSync(filePath, file.buffer);
+      console.log(`✅ Image written at: ${filePath}`);
+
+      // 2️⃣ Insert into Mould_Checklist_Images table
+      const pool = await sqlConnection.sql.connect();
+      const request = pool.request();
+
+      request.input("ChecklistID", sqlConnection.sql.Int, parseInt(checklistID));
+      request.input("Checkpoints", sqlConnection.sql.NVarChar(sqlConnection.sql.MAX), checkpointID.toString());
+      request.input("Image", sqlConnection.sql.VarBinary(sqlConnection.sql.MAX), file.buffer);
+      request.input("Timestamp", sqlConnection.sql.DateTime, new Date());
+
+      await request.query(`
+        INSERT INTO [dbo].[Mould_Checklist_Images] 
+        ([ChecklistID], [Checkpoints], [Image], [Timestamp])
+        VALUES (@ChecklistID, @Checkpoints, @Image, @Timestamp)
+      `);
+
+      middlewares.standardResponse(res, null, 200, "✅ Image uploaded successfully.");
+    } catch (error) {
+      console.error("❌ Upload error:", error);
+      middlewares.standardResponse(res, null, 500, "❌ Failed to upload image.");
+    }
+  }
+);
+
+
 module.exports = router;
