@@ -365,91 +365,91 @@ router.post("/updateValidationStatUnload", async (req, res) => {
 
 
 
-router.post("/load", (request, response) => {
-  console.log(moment().format("yyyy-MM-DD"));
-  new sqlConnection.sql.Request().query(
-    `SELECT Count(1) AS temp FROM Mould_Monitoring where EquipmentID = \'${request.body.EquipmentID}\' and MouldID = \'${request.body.MouldID}\'`,
-    (err, result) => {
-      if (err) {
-        middlewares.standardResponse(
-          response,
-          null,
-          300,
-          "Error executing query: " + err
-        );
-        console.error("Error executing query:", err);
-      } else {
-        if (parseInt(result.recordset[0].temp) > 0) {
-          new sqlConnection.sql.Request().query(
-            `UPDATE M
-SET 
-    M.MouldStatus = ${request.body.MouldStatus},
-    M.LastUpdatedTime = GETDATE(),
-    M.MouldInstanceLife = D.Total_Shots,
-    M.MouldCurrentLife = D.Total_Shots
-FROM [PPMS_LILBawal].[dbo].[Mould_Monitoring] M
-INNER JOIN [ToshibaBinaryFileDb].[dbo].[Machine_Data] D
-    ON M.EquipmentID COLLATE SQL_Latin1_General_CP1_CI_AS = D.Machine_ID COLLATE SQL_Latin1_General_CP1_CI_AS
-   OR M.MouldID COLLATE SQL_Latin1_General_CP1_CI_AS = D.Mould_ID COLLATE SQL_Latin1_General_CP1_CI_AS
-WHERE EquipmentID = \'${request.body.EquipmentID}\' OR MouldID = \'${request.body.MouldID}\';
-  INSERT INTO Mould_Genealogy VALUES (\'${request.body.MouldID}\',${request.body.CurrentMouldLife},${request.body.ParameterID},${request.body.ParameterValue},GETDATE());
-            UPDATE CONFIG_MOULD set MouldStatus = ${request.body.MouldStatus}, LastUpdatedTime = GETDATE() where MouldID = \'${request.body.MouldID}\';
-            `,
-            (err, result) => {
-              if (err) {
-                middlewares.standardResponse(
-                  response,
-                  null,
-                  300,
-                  "Error executing query: " + err
-                );
-                console.error("Error executing query:", err);
-              } else {
-                middlewares.standardResponse(
-                  response,
-                  result.recordset,
-                  200,
-                  "success"
-                );
-                console.dir(result.recordset);
-              }
-            }
-          );
-        } else {
-          new sqlConnection.sql.Request().query(
-            `INSERT INTO Mould_Monitoring VALUES (\'${request.body.EquipmentID}\',\'${request.body.MouldID}\',${request.body.MouldActualLife},${request.body.HealthCheckThreshold},${request.body.NextPMDue},${request.body.PMWarning},NULL,NULL,${request.body.HealthCheckDue},${request.body.HealthCheckWarning},NULL,NULL,${request.body.MouldLifeStatus},${request.body.MouldPMStatus},${request.body.MouldHealthStatus},${request.body.MouldStatus},GETDATE());
+// router.post("/load", (request, response) => {
+//   console.log(moment().format("yyyy-MM-DD"));
+//   new sqlConnection.sql.Request().query(
+//     `SELECT Count(1) AS temp FROM Mould_Monitoring where EquipmentID = \'${request.body.EquipmentID}\' and MouldID = \'${request.body.MouldID}\'`,
+//     (err, result) => {
+//       if (err) {
+//         middlewares.standardResponse(
+//           response,
+//           null,
+//           300,
+//           "Error executing query: " + err
+//         );
+//         console.error("Error executing query:", err);
+//       } else {
+//         if (parseInt(result.recordset[0].temp) > 0) {
+//           new sqlConnection.sql.Request().query(
+//             `UPDATE M
+// SET 
+//     M.MouldStatus = ${request.body.MouldStatus},
+//     M.LastUpdatedTime = GETDATE(),
+//     M.MouldInstanceLife = D.Total_Shots,
+//     M.MouldCurrentLife = D.Total_Shots
+// FROM [PPMS_LILBawal].[dbo].[Mould_Monitoring] M
+// INNER JOIN [ToshibaBinaryFileDb].[dbo].[Machine_Data] D
+//     ON M.EquipmentID COLLATE SQL_Latin1_General_CP1_CI_AS = D.Machine_ID COLLATE SQL_Latin1_General_CP1_CI_AS
+//    OR M.MouldID COLLATE SQL_Latin1_General_CP1_CI_AS = D.Mould_ID COLLATE SQL_Latin1_General_CP1_CI_AS
+// WHERE EquipmentID = \'${request.body.EquipmentID}\' OR MouldID = \'${request.body.MouldID}\';
+//   INSERT INTO Mould_Genealogy VALUES (\'${request.body.MouldID}\',${request.body.CurrentMouldLife},${request.body.ParameterID},${request.body.ParameterValue},GETDATE());
+//             UPDATE CONFIG_MOULD set MouldStatus = ${request.body.MouldStatus}, LastUpdatedTime = GETDATE() where MouldID = \'${request.body.MouldID}\';
+//             `,
+//             (err, result) => {
+//               if (err) {
+//                 middlewares.standardResponse(
+//                   response,
+//                   null,
+//                   300,
+//                   "Error executing query: " + err
+//                 );
+//                 console.error("Error executing query:", err);
+//               } else {
+//                 middlewares.standardResponse(
+//                   response,
+//                   result.recordset,
+//                   200,
+//                   "success"
+//                 );
+//                 console.dir(result.recordset);
+//               }
+//             }
+//           );
+//         } else {
+//           new sqlConnection.sql.Request().query(
+//             `INSERT INTO Mould_Monitoring VALUES (\'${request.body.EquipmentID}\',\'${request.body.MouldID}\',${request.body.MouldActualLife},${request.body.HealthCheckThreshold},${request.body.NextPMDue},${request.body.PMWarning},NULL,NULL,${request.body.HealthCheckDue},${request.body.HealthCheckWarning},NULL,NULL,${request.body.MouldLifeStatus},${request.body.MouldPMStatus},${request.body.MouldHealthStatus},${request.body.MouldStatus},GETDATE());
             
-            INSERT INTO Mould_EquipmentLog VALUES (\'${request.body.MouldID}\',\'${request.body.EquipmentID}\',${request.body.MouldStatus},GETDATE());
+//             INSERT INTO Mould_EquipmentLog VALUES (\'${request.body.MouldID}\',\'${request.body.EquipmentID}\',${request.body.MouldStatus},GETDATE());
 
-            INSERT INTO Mould_Genealogy VALUES (\'${request.body.MouldID}\',${request.body.CurrentMouldLife},${request.body.ParameterID},${request.body.ParameterValue},GETDATE());
-            INSERT INTO Mould_EquipmentLog VALUES (\'${request.body.MouldID}\',${request.body.EquipmentID},${request.body.MouldStatus},GETDATE());
+//             INSERT INTO Mould_Genealogy VALUES (\'${request.body.MouldID}\',${request.body.CurrentMouldLife},${request.body.ParameterID},${request.body.ParameterValue},GETDATE());
+//             INSERT INTO Mould_EquipmentLog VALUES (\'${request.body.MouldID}\',${request.body.EquipmentID},${request.body.MouldStatus},GETDATE());
             
-            UPDATE CONFIG_MOULD set MouldStatus = ${request.body.MouldStatus}, LastUpdatedTime = GETDATE() where MouldID = \'${request.body.MouldID}\';`,
-            (err, result) => {
-              if (err) {
-                middlewares.standardResponse(
-                  response,
-                  null,
-                  300,
-                  "Error executing query: " + err
-                );
-                console.error("Error executing query:", err);
-              } else {
-                middlewares.standardResponse(
-                  response,
-                  result.recordset,
-                  200,
-                  "success"
-                );
-                console.dir(result.recordset);
-              }
-            }
-          );
-        }
-      }
-    }
-  );
-});
+//             UPDATE CONFIG_MOULD set MouldStatus = ${request.body.MouldStatus}, LastUpdatedTime = GETDATE() where MouldID = \'${request.body.MouldID}\';`,
+//             (err, result) => {
+//               if (err) {
+//                 middlewares.standardResponse(
+//                   response,
+//                   null,
+//                   300,
+//                   "Error executing query: " + err
+//                 );
+//                 console.error("Error executing query:", err);
+//               } else {
+//                 middlewares.standardResponse(
+//                   response,
+//                   result.recordset,
+//                   200,
+//                   "success"
+//                 );
+//                 console.dir(result.recordset);
+//               }
+//             }
+//           );
+//         }
+//       }
+//     }
+//   );
+// });
 
 router.get("/ids", (request, response) => {
   new sqlConnection.sql.Request().query(
@@ -708,6 +708,136 @@ router.get("/activebreakdown/:mouldId", async (req, res) => {
 });
 
 
+router.post("/load", async (req, res) => {
+  const {
+    EquipmentID,
+    MouldID,
+    MouldStatus,
+    MouldLifeStatus,
+    MouldActualLife,
+    HealthCheckThreshold,
+    NextPMDue,
+    PMWarning,
+    HealthCheckDue,
+    HealthCheckWarning,
+    MouldPMStatus,
+    MouldHealthStatus,
+    CurrentMouldLife,
+    ParameterID,
+    ParameterValue,
+    NewMouldLife
+  } = req.body;
 
+  if (!EquipmentID || !MouldID) {
+    return middlewares.standardResponse(res, null, 400, "Missing required fields");
+  }
+
+  try {
+    // 🔹 Get StationID
+    const getStationReq = new sqlConnection.sql.Request();
+    getStationReq.input("EquipmentID", sqlConnection.sql.VarChar, EquipmentID);
+    const stationResult = await getStationReq.query(`
+      SELECT StationID 
+      FROM [PPMS_LILBawal].[dbo].[Config_Equipment] 
+      WHERE EquipmentID = @EquipmentID
+    `);
+
+    const StationID = stationResult.recordset.length
+      ? stationResult.recordset[0].StationID
+      : 1; // fallback
+
+    // 🔹 Check if record exists
+    const checkReq = new sqlConnection.sql.Request();
+    const checkQuery = `
+      SELECT COUNT(1) AS temp 
+      FROM [PPMS_LILBawal].[dbo].[Mould_Monitoring] 
+      WHERE EquipmentID = '${EquipmentID}' AND MouldID = '${MouldID}'
+    `;
+    const checkResult = await checkReq.query(checkQuery);
+    const exists = parseInt(checkResult.recordset[0].temp) > 0;
+
+    const dbReq = new sqlConnection.sql.Request();
+
+    if (exists) {
+      // 🔹 Update existing
+      await dbReq.query(`
+        UPDATE M
+        SET 
+            M.MouldStatus = ${MouldStatus},
+            M.MouldLifeStatus = ${MouldLifeStatus},
+            M.LastUpdatedTime = GETDATE(),
+            M.MouldActualLife = ${NewMouldLife}
+        FROM [PPMS_LILBawal].[dbo].[Mould_Monitoring] M
+        WHERE EquipmentID = '${EquipmentID}' AND MouldID = '${MouldID}';
+
+        INSERT INTO [PPMS_LILBawal].[dbo].[Mould_Genealogy]
+        VALUES ('${MouldID}', ${CurrentMouldLife}, ${ParameterID}, ${ParameterValue}, GETDATE());
+
+        UPDATE [PPMS_LILBawal].[dbo].[CONFIG_MOULD]
+        SET MouldStatus = ${MouldStatus}, LastUpdatedTime = GETDATE()
+        WHERE MouldID = '${MouldID}';
+      `);
+    } else {
+      // 🔹 Insert new
+      await dbReq.query(`
+        INSERT INTO [PPMS_LILBawal].[dbo].[Mould_Monitoring]
+        VALUES ('${EquipmentID}','${MouldID}',${MouldActualLife},${HealthCheckThreshold},${NextPMDue},${PMWarning},
+                NULL,NULL,${HealthCheckDue},${HealthCheckWarning},NULL,NULL,${MouldLifeStatus},
+                ${MouldPMStatus},${MouldHealthStatus},${MouldStatus},GETDATE());
+
+        INSERT INTO [PPMS_LILBawal].[dbo].[Mould_EquipmentLog]
+        VALUES ('${MouldID}','${EquipmentID}',${MouldStatus},GETDATE());
+
+        INSERT INTO [PPMS_LILBawal].[dbo].[Mould_Genealogy]
+        VALUES ('${MouldID}',${CurrentMouldLife},${ParameterID},${ParameterValue},GETDATE());
+
+        UPDATE [PPMS_LILBawal].[dbo].[CONFIG_MOULD]
+        SET MouldStatus = ${MouldStatus}, LastUpdatedTime = GETDATE()
+        WHERE MouldID = '${MouldID}';
+      `);
+    }
+
+    // 🔹 Compute Multiplier and ShotCount for PLC
+    const a = Math.floor(NewMouldLife / 10000);
+    const b = a * 10000;
+    const ShotCount = NewMouldLife - b;
+
+    const multiplierTag = `ac:PPMS_SolutionLIL/TotalMouldLife/Machine${StationID}/Multiplier`;
+    const shotCountTag = `ac:PPMS_SolutionLIL/TotalMouldLife/Machine${StationID}/ShotCount`;
+
+    // 🔹 Send data to PLC
+    const timestamp = new Date().toISOString();
+    const credentials = base64.encode("Chelsy:Dalisoft@123");
+
+    const tagPayloads = [
+      { pointName: multiplierTag, timestamp, quality: 9, value: a },
+      { pointName: shotCountTag, timestamp, quality: 9, value: ShotCount }
+    ];
+
+    const apiResponse = await axios.post(
+      "http://DESKTOP-T266BV5/ODataConnector/rest/RealtimeData/Write",
+      tagPayloads,
+      {
+        headers: {
+          Authorization: `Basic ${credentials}`,
+          "Content-Type": "application/json"
+        }
+      }
+    );
+
+    return middlewares.standardResponse(
+      res,
+      {
+        updatedTags: tagPayloads,
+        apiResponse: apiResponse.data,
+      },
+      200,
+      "Mould data and tag values updated successfully"
+    );
+  } catch (err) {
+    console.error("❌ Error executing query:", err);
+    return middlewares.standardResponse(res, null, 500, "Error: " + err.message);
+  }
+});
 
 module.exports = router;
