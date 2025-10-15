@@ -729,7 +729,7 @@ router.post("/load", async (req, res) => {
   } = req.body;
 
   if (!EquipmentID || !MouldID) {
-    return middlewares.standardResponse(res, null, 400, "Missing required fields");
+    return middlewares.standardResponse(res, null, 400, "Missing required fields: EquipmentID or MouldID");
   }
 
   try {
@@ -748,64 +748,82 @@ router.post("/load", async (req, res) => {
 
     // 🔹 Check if record exists
     const checkReq = new sqlConnection.sql.Request();
-    const checkQuery = `
+    checkReq.input("EquipmentID", sqlConnection.sql.VarChar, EquipmentID);
+    checkReq.input("MouldID", sqlConnection.sql.VarChar, MouldID);
+    const checkResult = await checkReq.query(`
       SELECT COUNT(1) AS temp 
       FROM [PPMS_LILBawal].[dbo].[Mould_Monitoring] 
-      WHERE EquipmentID = '${EquipmentID}' AND MouldID = '${MouldID}'
-    `;
-    const checkResult = await checkReq.query(checkQuery);
-    const exists = parseInt(checkResult.recordset[0].temp) > 0;
+      WHERE EquipmentID = @EquipmentID AND MouldID = @MouldID
+    `);
 
+    const exists = parseInt(checkResult.recordset[0].temp) > 0;
     const dbReq = new sqlConnection.sql.Request();
 
+    // Common inputs
+    dbReq.input("EquipmentID", sqlConnection.sql.VarChar, EquipmentID);
+    dbReq.input("MouldID", sqlConnection.sql.VarChar, MouldID);
+    dbReq.input("MouldStatus", sqlConnection.sql.Int, MouldStatus || 0);
+    dbReq.input("MouldLifeStatus", sqlConnection.sql.Int, MouldLifeStatus || 0);
+    dbReq.input("MouldActualLife", sqlConnection.sql.Int, MouldActualLife || 0);
+    dbReq.input("NewMouldLife", sqlConnection.sql.Int, NewMouldLife || 0);
+    dbReq.input("CurrentMouldLife", sqlConnection.sql.Int, CurrentMouldLife || 0);
+    dbReq.input("ParameterID", sqlConnection.sql.Int, ParameterID || 0);
+    dbReq.input("ParameterValue", sqlConnection.sql.Int, ParameterValue || 0);
+    dbReq.input("HealthCheckThreshold", sqlConnection.sql.Int, HealthCheckThreshold || 0);
+    dbReq.input("NextPMDue", sqlConnection.sql.Int, NextPMDue || 0);
+    dbReq.input("PMWarning", sqlConnection.sql.Int, PMWarning || 0);
+    dbReq.input("HealthCheckDue", sqlConnection.sql.Int, HealthCheckDue || 0);
+    dbReq.input("HealthCheckWarning", sqlConnection.sql.Int, HealthCheckWarning || 0);
+    dbReq.input("MouldPMStatus", sqlConnection.sql.Int, MouldPMStatus || 0);
+    dbReq.input("MouldHealthStatus", sqlConnection.sql.Int, MouldHealthStatus || 0);
+
     if (exists) {
-      // 🔹 Update existing
+      // 🔹 Update existing record
       await dbReq.query(`
         UPDATE M
         SET 
-            M.MouldStatus = ${MouldStatus},
-            M.MouldLifeStatus = ${MouldLifeStatus},
+            M.MouldStatus = @MouldStatus,
+            M.MouldLifeStatus = @MouldLifeStatus,
             M.LastUpdatedTime = GETDATE(),
-            M.MouldActualLife = ${NewMouldLife}
+            M.MouldActualLife = @NewMouldLife
         FROM [PPMS_LILBawal].[dbo].[Mould_Monitoring] M
-        WHERE EquipmentID = '${EquipmentID}' AND MouldID = '${MouldID}';
+        WHERE EquipmentID = @EquipmentID AND MouldID = @MouldID;
 
         INSERT INTO [PPMS_LILBawal].[dbo].[Mould_Genealogy]
-        VALUES ('${MouldID}', ${CurrentMouldLife}, ${ParameterID}, ${ParameterValue}, GETDATE());
+        VALUES (@MouldID, @CurrentMouldLife, @ParameterID, @ParameterValue, GETDATE());
 
         UPDATE [PPMS_LILBawal].[dbo].[CONFIG_MOULD]
-        SET MouldStatus = ${MouldStatus}, LastUpdatedTime = GETDATE()
-        WHERE MouldID = '${MouldID}';
+        SET MouldStatus = @MouldStatus, LastUpdatedTime = GETDATE()
+        WHERE MouldID = @MouldID;
       `);
     } else {
-      // 🔹 Insert new
+      // 🔹 Insert new record
       await dbReq.query(`
         INSERT INTO [PPMS_LILBawal].[dbo].[Mould_Monitoring]
-        VALUES ('${EquipmentID}','${MouldID}',${MouldActualLife},${HealthCheckThreshold},${NextPMDue},${PMWarning},
-                NULL,NULL,${HealthCheckDue},${HealthCheckWarning},NULL,NULL,${MouldLifeStatus},
-                ${MouldPMStatus},${MouldHealthStatus},${MouldStatus},GETDATE());
+        VALUES (@EquipmentID, @MouldID, @MouldActualLife, @HealthCheckThreshold, @NextPMDue, @PMWarning,
+                NULL, NULL, @HealthCheckDue, @HealthCheckWarning, NULL, NULL,
+                @MouldLifeStatus, @MouldPMStatus, @MouldHealthStatus, @MouldStatus, GETDATE());
 
         INSERT INTO [PPMS_LILBawal].[dbo].[Mould_EquipmentLog]
-        VALUES ('${MouldID}','${EquipmentID}',${MouldStatus},GETDATE());
+        VALUES (@MouldID, @EquipmentID, @MouldStatus, GETDATE());
 
         INSERT INTO [PPMS_LILBawal].[dbo].[Mould_Genealogy]
-        VALUES ('${MouldID}',${CurrentMouldLife},${ParameterID},${ParameterValue},GETDATE());
+        VALUES (@MouldID, @CurrentMouldLife, @ParameterID, @ParameterValue, GETDATE());
 
         UPDATE [PPMS_LILBawal].[dbo].[CONFIG_MOULD]
-        SET MouldStatus = ${MouldStatus}, LastUpdatedTime = GETDATE()
-        WHERE MouldID = '${MouldID}';
+        SET MouldStatus = @MouldStatus, LastUpdatedTime = GETDATE()
+        WHERE MouldID = @MouldID;
       `);
     }
 
-    // 🔹 Compute Multiplier and ShotCount for PLC
-    const a = Math.floor(NewMouldLife / 10000);
+    // 🔹 Compute values for PLC
+    const a = Math.floor((NewMouldLife || 0) / 10000);
     const b = a * 10000;
-    const ShotCount = NewMouldLife - b;
+    const ShotCount = (NewMouldLife || 0) - b;
 
     const multiplierTag = `ac:PPMS_SolutionLIL/TotalMouldLife/Machine${StationID}/Multiplier`;
     const shotCountTag = `ac:PPMS_SolutionLIL/TotalMouldLife/Machine${StationID}/ShotCount`;
 
-    // 🔹 Send data to PLC
     const timestamp = new Date().toISOString();
     const credentials = base64.encode("Chelsy:Dalisoft@123");
 
@@ -814,6 +832,7 @@ router.post("/load", async (req, res) => {
       { pointName: shotCountTag, timestamp, quality: 9, value: ShotCount }
     ];
 
+    // 🔹 Write to PLC
     const apiResponse = await axios.post(
       "http://DESKTOP-T266BV5/ODataConnector/rest/RealtimeData/Write",
       tagPayloads,
@@ -836,7 +855,7 @@ router.post("/load", async (req, res) => {
     );
   } catch (err) {
     console.error("❌ Error executing query:", err);
-    return middlewares.standardResponse(res, null, 500, "Error: " + err.message);
+    return middlewares.standardResponse(res, null, 500, "Error occurred while updating mould data: " + err.message);
   }
 });
 
