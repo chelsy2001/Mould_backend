@@ -107,17 +107,19 @@ router.post("/updateValidationStatusLoad", async (req, res) => {
   try {
     const request = new sqlConnection.sql.Request();
 
-    // 1️⃣ Get StationID from Config_Equipment
+    // 1️⃣ Get StationID and EquipmentName from Config_Equipment
     request.input("EquipmentID", sqlConnection.sql.NVarChar, EquipmentID);
     const equipmentResult = await request.query(`
-      SELECT TOP 1 StationID FROM Config_Equipment WHERE EquipmentID = @EquipmentID
+      SELECT TOP 1 StationID, EquipmentName 
+      FROM Config_Equipment 
+      WHERE EquipmentID = @EquipmentID
     `);
 
     if (!equipmentResult.recordset.length) {
       return middlewares.standardResponse(res, null, 404, `EquipmentID not found in DB: ${EquipmentID}`);
     }
 
-    const StationID = equipmentResult.recordset[0].StationID;
+    const { StationID, EquipmentName } = equipmentResult.recordset[0];
 
     // 2️⃣ Get ProdDate & ProdShift from Prod_ShiftInformation
     const prodShiftResult = await new sqlConnection.sql.Request()
@@ -160,9 +162,6 @@ router.post("/updateValidationStatusLoad", async (req, res) => {
     };
 
     const machineTag = stationTagMap[StationID];
-    if (!machineTag) {
-      return middlewares.standardResponse(res, null, 400, `No tag found for StationID: ${StationID}`);
-    }
 
     // 5️⃣ Update Mould_MachineMatrix & Insert into Mould_EquipmentLog
     const updateAndInsertQuery = `
@@ -189,38 +188,48 @@ router.post("/updateValidationStatusLoad", async (req, res) => {
     const dbResult = await updateRequest.query(updateAndInsertQuery);
     console.log("✅ Database updated successfully");
 
-    // 6️⃣ Execute Binary File
-    const exePath = "D:\\ToshibaIntegrationTesting\\Application\\Write2Machine\\Debug\\Debug\\ToshibaLocal2Machines.exe";
-    const validationStatus = "1";
-    const exeArgs = [EquipmentID, mouldID, validationStatus];
+    let exeOutput = null;
+    let apiResponseData = null;
 
-    const runExe = () =>
-      new Promise((resolve, reject) => {
-        execFile(exePath, exeArgs, (error, stdout, stderr) => {
-          if (error) return reject(stderr || error.message);
-          resolve(stdout || stderr);
+    if (EquipmentName.includes("Shibura")) {
+      // Shibura → DB + Binary, skip tag
+      const exePath = "D:\\ToshibaIntegrationTesting\\Application\\Write2Machine\\Debug\\Debug\\ToshibaLocal2Machines.exe";
+      const validationStatus = "1";
+      const exeArgs = [EquipmentID, mouldID, validationStatus];
+
+      const runExe = () =>
+        new Promise((resolve, reject) => {
+          execFile(exePath, exeArgs, (error, stdout, stderr) => {
+            if (error) return reject(stderr || error.message);
+            resolve(stdout || stderr);
+          });
         });
-      });
 
-    const exeOutput = await runExe();
-    console.log("✅ EXE executed successfully:", exeOutput);
+      exeOutput = await runExe();
+      console.log("✅ Binary executed for Shibura machine, skipping tag update");
+    } else {
+      // Non-Shibura → DB + Tag, skip binary
+      if (machineTag) {
+        const timestamp = new Date().toISOString();
+        const payload = [{ pointName: machineTag, timestamp, quality: 9, value: 1 }];
+        const credentials = base64.encode("Chelsy:Dalisoft@123");
 
-    // 7️⃣ Send Tag Update to Machine API
-    const timestamp = new Date().toISOString();
-    const payload = [{ pointName: machineTag, timestamp, quality: 9, value: 1 }];
-    const credentials = base64.encode("Chelsy:Dalisoft@123");
+        const apiResponse = await axios.post(
+          "http://DESKTOP-T266BV5/ODataConnector/rest/RealtimeData/Write",
+          payload,
+          { headers: { Authorization: `Basic ${credentials}`, "Content-Type": "application/json" } }
+        );
 
-    const apiResponse = await axios.post(
-      "http://DESKTOP-T266BV5/ODataConnector/rest/RealtimeData/Write",
-      payload,
-      { headers: { Authorization: `Basic ${credentials}`, "Content-Type": "application/json" } }
-    );
+        apiResponseData = apiResponse.data;
+        console.log("✅ Tag updated for non-Shibura machine");
+      }
+    }
 
     return middlewares.standardResponse(
       res,
-      { dbUpdate: dbResult.rowsAffected, exeOutput, apiPayload: payload, apiResponse: apiResponse.data },
+      { dbUpdate: dbResult.rowsAffected, exeOutput, apiResponse: apiResponseData },
       200,
-      "ValidationStatus updated, binary executed, and tag updated successfully"
+      "ValidationStatus updated successfully with conditional execution"
     );
 
   } catch (err) {
@@ -228,6 +237,7 @@ router.post("/updateValidationStatusLoad", async (req, res) => {
     return middlewares.standardResponse(res, { error: err.message }, 500, "Error occurred while updating ValidationStatus or machine tag");
   }
 });
+
 
 
 
@@ -241,17 +251,19 @@ router.post("/updateValidationStatUnload", async (req, res) => {
   try {
     const request = new sqlConnection.sql.Request();
 
-    // 1️⃣ Get StationID from Config_Equipment
+    // 1️⃣ Get StationID & EquipmentName from Config_Equipment
     request.input("EquipmentID", sqlConnection.sql.NVarChar, EquipmentID);
     const equipmentResult = await request.query(`
-      SELECT TOP 1 StationID FROM Config_Equipment WHERE EquipmentID = @EquipmentID
+      SELECT TOP 1 StationID, EquipmentName 
+      FROM Config_Equipment 
+      WHERE EquipmentID = @EquipmentID
     `);
 
     if (!equipmentResult.recordset.length) {
       return middlewares.standardResponse(res, null, 404, `EquipmentID not found in DB: ${EquipmentID}`);
     }
 
-    const StationID = equipmentResult.recordset[0].StationID;
+    const { StationID, EquipmentName } = equipmentResult.recordset[0];
 
     // 2️⃣ Get ProdDate & ProdShift from Prod_ShiftInformation
     const prodShiftResult = await new sqlConnection.sql.Request()
@@ -294,9 +306,6 @@ router.post("/updateValidationStatUnload", async (req, res) => {
     };
 
     const machineTag = stationTagMap[StationID];
-    if (!machineTag) {
-      return middlewares.standardResponse(res, null, 400, `No tag found for StationID: ${StationID}`);
-    }
 
     // 5️⃣ Update Mould_MachineMatrix & Insert into Mould_EquipmentLog (ValidationStatus = 0)
     const updateAndInsertQuery = `
@@ -323,38 +332,48 @@ router.post("/updateValidationStatUnload", async (req, res) => {
     const dbResult = await updateRequest.query(updateAndInsertQuery);
     console.log("✅ Database updated successfully (ValidationStatus = 0)");
 
-    // 6️⃣ Execute Binary File
-    const exePath = "D:\\ToshibaIntegrationTesting\\Application\\Write2Machine\\Debug\\Debug\\ToshibaLocal2Machines.exe";
-    const validationStatus = "0";
-    const exeArgs = [EquipmentID, mouldID, validationStatus];
+    let exeOutput = null;
+    let apiResponseData = null;
 
-    const runExe = () =>
-      new Promise((resolve, reject) => {
-        execFile(exePath, exeArgs, (error, stdout, stderr) => {
-          if (error) return reject(stderr || error.message);
-          resolve(stdout || stderr);
+    if (EquipmentName.includes("Shibura")) {
+      // ✅ Shibura → DB + Binary only
+      const exePath = "D:\\ToshibaIntegrationTesting\\Application\\Write2Machine\\Debug\\Debug\\ToshibaLocal2Machines.exe";
+      const validationStatus = "0";
+      const exeArgs = [EquipmentID, mouldID, validationStatus];
+
+      const runExe = () =>
+        new Promise((resolve, reject) => {
+          execFile(exePath, exeArgs, (error, stdout, stderr) => {
+            if (error) return reject(stderr || error.message);
+            resolve(stdout || stderr);
+          });
         });
-      });
 
-    const exeOutput = await runExe();
-    console.log("✅ EXE executed successfully:", exeOutput);
+      exeOutput = await runExe();
+      console.log("✅ Binary executed for Shibura machine, skipping tag update");
+    } else {
+      // ✅ Non-Shibura → DB + Tag only
+      if (machineTag) {
+        const timestamp = new Date().toISOString();
+        const payload = [{ pointName: machineTag, timestamp, quality: 9, value: 0 }];
+        const credentials = base64.encode("Chelsy:Dalisoft@123");
 
-    // 7️⃣ Send Tag Update to Machine API
-    const timestamp = new Date().toISOString();
-    const payload = [{ pointName: machineTag, timestamp, quality: 9, value: 0 }];
-    const credentials = base64.encode("Chelsy:Dalisoft@123");
+        const apiResponse = await axios.post(
+          "http://DESKTOP-T266BV5/ODataConnector/rest/RealtimeData/Write",
+          payload,
+          { headers: { Authorization: `Basic ${credentials}`, "Content-Type": "application/json" } }
+        );
 
-    const apiResponse = await axios.post(
-      "http://DESKTOP-T266BV5/ODataConnector/rest/RealtimeData/Write",
-      payload,
-      { headers: { Authorization: `Basic ${credentials}`, "Content-Type": "application/json" } }
-    );
+        apiResponseData = apiResponse.data;
+        console.log("✅ Tag updated for non-Shibura machine, skipping binary execution");
+      }
+    }
 
     return middlewares.standardResponse(
       res,
-      { dbUpdate: dbResult.rowsAffected, exeOutput, apiPayload: payload, apiResponse: apiResponse.data },
+      { dbUpdate: dbResult.rowsAffected, exeOutput, apiResponse: apiResponseData },
       200,
-      "ValidationStatus unloaded, binary executed, and tag updated successfully"
+      "ValidationStatus unloaded successfully with conditional execution"
     );
 
   } catch (err) {
@@ -362,6 +381,7 @@ router.post("/updateValidationStatUnload", async (req, res) => {
     return middlewares.standardResponse(res, { error: err.message }, 500, "Error occurred while unloading ValidationStatus or updating machine tag");
   }
 });
+
 
 
 
@@ -708,6 +728,156 @@ router.get("/activebreakdown/:mouldId", async (req, res) => {
 });
 
 
+// router.post("/load", async (req, res) => {
+//   const {
+//     EquipmentID,
+//     MouldID,
+//     MouldStatus,
+//     MouldLifeStatus,
+//     MouldActualLife,
+//     HealthCheckThreshold,
+//     NextPMDue,
+//     PMWarning,
+//     HealthCheckDue,
+//     HealthCheckWarning,
+//     MouldPMStatus,
+//     MouldHealthStatus,
+//     CurrentMouldLife,
+//     ParameterID,
+//     ParameterValue,
+//     NewMouldLife
+//   } = req.body;
+
+//   if (!EquipmentID || !MouldID) {
+//     return middlewares.standardResponse(res, null, 400, "Missing required fields: EquipmentID or MouldID");
+//   }
+
+//   try {
+//     // 🔹 Get StationID
+//     const getStationReq = new sqlConnection.sql.Request();
+//     getStationReq.input("EquipmentID", sqlConnection.sql.VarChar, EquipmentID);
+//     const stationResult = await getStationReq.query(`
+//       SELECT StationID 
+//       FROM [PPMS_LILBawal].[dbo].[Config_Equipment] 
+//       WHERE EquipmentID = @EquipmentID
+//     `);
+
+//     const StationID = stationResult.recordset.length
+//       ? stationResult.recordset[0].StationID
+//       : 1; // fallback
+
+//     // 🔹 Check if record exists
+//     const checkReq = new sqlConnection.sql.Request();
+//     checkReq.input("EquipmentID", sqlConnection.sql.VarChar, EquipmentID);
+//     checkReq.input("MouldID", sqlConnection.sql.VarChar, MouldID);
+//     const checkResult = await checkReq.query(`
+//       SELECT COUNT(1) AS temp 
+//       FROM [PPMS_LILBawal].[dbo].[Mould_Monitoring] 
+//       WHERE EquipmentID = @EquipmentID AND MouldID = @MouldID
+//     `);
+
+//     const exists = parseInt(checkResult.recordset[0].temp) > 0;
+//     const dbReq = new sqlConnection.sql.Request();
+
+//     // Common inputs
+//     dbReq.input("EquipmentID", sqlConnection.sql.VarChar, EquipmentID);
+//     dbReq.input("MouldID", sqlConnection.sql.VarChar, MouldID);
+//     dbReq.input("MouldStatus", sqlConnection.sql.Int, MouldStatus || 0);
+//     dbReq.input("MouldLifeStatus", sqlConnection.sql.Int, MouldLifeStatus || 0);
+//     dbReq.input("MouldActualLife", sqlConnection.sql.Int, MouldActualLife || 0);
+//     dbReq.input("NewMouldLife", sqlConnection.sql.Int, NewMouldLife || 0);
+//     dbReq.input("CurrentMouldLife", sqlConnection.sql.Int, CurrentMouldLife || 0);
+//     dbReq.input("ParameterID", sqlConnection.sql.Int, ParameterID || 0);
+//     dbReq.input("ParameterValue", sqlConnection.sql.Int, ParameterValue || 0);
+//     dbReq.input("HealthCheckThreshold", sqlConnection.sql.Int, HealthCheckThreshold || 0);
+//     dbReq.input("NextPMDue", sqlConnection.sql.Int, NextPMDue || 0);
+//     dbReq.input("PMWarning", sqlConnection.sql.Int, PMWarning || 0);
+//     dbReq.input("HealthCheckDue", sqlConnection.sql.Int, HealthCheckDue || 0);
+//     dbReq.input("HealthCheckWarning", sqlConnection.sql.Int, HealthCheckWarning || 0);
+//     dbReq.input("MouldPMStatus", sqlConnection.sql.Int, MouldPMStatus || 0);
+//     dbReq.input("MouldHealthStatus", sqlConnection.sql.Int, MouldHealthStatus || 0);
+
+//     if (exists) {
+//       // 🔹 Update existing record
+//       await dbReq.query(`
+//         UPDATE M
+//         SET 
+//             M.MouldStatus = @MouldStatus,
+//             M.MouldLifeStatus = @MouldLifeStatus,
+//             M.LastUpdatedTime = GETDATE(),
+//             M.MouldActualLife = @NewMouldLife
+//         FROM [PPMS_LILBawal].[dbo].[Mould_Monitoring] M
+//         WHERE EquipmentID = @EquipmentID AND MouldID = @MouldID;
+
+//         INSERT INTO [PPMS_LILBawal].[dbo].[Mould_Genealogy]
+//         VALUES (@MouldID, @CurrentMouldLife, @ParameterID, @ParameterValue, GETDATE());
+
+//         UPDATE [PPMS_LILBawal].[dbo].[CONFIG_MOULD]
+//         SET MouldStatus = @MouldStatus, LastUpdatedTime = GETDATE()
+//         WHERE MouldID = @MouldID;
+//       `);
+//     } else {
+//       // 🔹 Insert new record
+//       await dbReq.query(`
+//         INSERT INTO [PPMS_LILBawal].[dbo].[Mould_Monitoring]
+//         VALUES (@EquipmentID, @MouldID, @MouldActualLife, @HealthCheckThreshold, @NextPMDue, @PMWarning,
+//                 NULL, NULL, @HealthCheckDue, @HealthCheckWarning, NULL, NULL,
+//                 @MouldLifeStatus, @MouldPMStatus, @MouldHealthStatus, @MouldStatus, GETDATE());
+
+//         INSERT INTO [PPMS_LILBawal].[dbo].[Mould_EquipmentLog]
+//         VALUES (@MouldID, @EquipmentID, @MouldStatus, GETDATE());
+
+//         INSERT INTO [PPMS_LILBawal].[dbo].[Mould_Genealogy]
+//         VALUES (@MouldID, @CurrentMouldLife, @ParameterID, @ParameterValue, GETDATE());
+
+//         UPDATE [PPMS_LILBawal].[dbo].[CONFIG_MOULD]
+//         SET MouldStatus = @MouldStatus, LastUpdatedTime = GETDATE()
+//         WHERE MouldID = @MouldID;
+//       `);
+//     }
+
+//     // 🔹 Compute values for PLC
+//     const a = Math.floor((NewMouldLife || 0) / 10000);
+//     const b = a * 10000;
+//     const ShotCount = (NewMouldLife || 0) - b;
+
+//     const multiplierTag = `ac:PPMS_SolutionLIL/TotalMouldLife/Machine${StationID}/Multiplier`;
+//     const shotCountTag = `ac:PPMS_SolutionLIL/TotalMouldLife/Machine${StationID}/ShotCount`;
+
+//     const timestamp = new Date().toISOString();
+//     const credentials = base64.encode("Chelsy:Dalisoft@123");
+
+//     const tagPayloads = [
+//       { pointName: multiplierTag, timestamp, quality: 9, value: a },
+//       { pointName: shotCountTag, timestamp, quality: 9, value: ShotCount }
+//     ];
+
+//     // 🔹 Write to PLC
+//     const apiResponse = await axios.post(
+//       "http://DESKTOP-T266BV5/ODataConnector/rest/RealtimeData/Write",
+//       tagPayloads,
+//       {
+//         headers: {
+//           Authorization: `Basic ${credentials}`,
+//           "Content-Type": "application/json"
+//         }
+//       }
+//     );
+
+//     return middlewares.standardResponse(
+//       res,
+//       {
+//         updatedTags: tagPayloads,
+//         apiResponse: apiResponse.data,
+//       },
+//       200,
+//       "Mould data and tag values updated successfully"
+//     );
+//   } catch (err) {
+//     console.error("❌ Error executing query:", err);
+//     return middlewares.standardResponse(res, null, 500, "Error occurred while updating mould data: " + err.message);
+//   }
+// });
 router.post("/load", async (req, res) => {
   const {
     EquipmentID,
@@ -733,18 +903,17 @@ router.post("/load", async (req, res) => {
   }
 
   try {
-    // 🔹 Get StationID
+    // 🔹 Get StationID & EquipmentName
     const getStationReq = new sqlConnection.sql.Request();
     getStationReq.input("EquipmentID", sqlConnection.sql.VarChar, EquipmentID);
     const stationResult = await getStationReq.query(`
-      SELECT StationID 
-      FROM [PPMS_LILBawal].[dbo].[Config_Equipment] 
+      SELECT StationID, EquipmentName
+      FROM [PPMS_LILBawal].[dbo].[Config_Equipment]
       WHERE EquipmentID = @EquipmentID
     `);
 
-    const StationID = stationResult.recordset.length
-      ? stationResult.recordset[0].StationID
-      : 1; // fallback
+    const StationID = stationResult.recordset.length ? stationResult.recordset[0].StationID : 1;
+    const EquipmentName = stationResult.recordset.length ? stationResult.recordset[0].EquipmentName : "";
 
     // 🔹 Check if record exists
     const checkReq = new sqlConnection.sql.Request();
@@ -816,6 +985,16 @@ router.post("/load", async (req, res) => {
       `);
     }
 
+    // 🔹 Skip PLC Tag Update for Shibura Machines
+    if (EquipmentName && EquipmentName.toLowerCase().includes("shibura")) {
+      return middlewares.standardResponse(
+        res,
+        { updatedTags: [], apiResponse: null, EquipmentName },
+        200,
+        "Mould data updated successfully (with conditional tag write)"
+      );
+    }
+
     // 🔹 Compute values for PLC
     const a = Math.floor((NewMouldLife || 0) / 10000);
     const b = a * 10000;
@@ -832,7 +1011,6 @@ router.post("/load", async (req, res) => {
       { pointName: shotCountTag, timestamp, quality: 9, value: ShotCount }
     ];
 
-    // 🔹 Write to PLC
     const apiResponse = await axios.post(
       "http://DESKTOP-T266BV5/ODataConnector/rest/RealtimeData/Write",
       tagPayloads,
@@ -849,13 +1027,14 @@ router.post("/load", async (req, res) => {
       {
         updatedTags: tagPayloads,
         apiResponse: apiResponse.data,
+        EquipmentName
       },
       200,
       "Mould data and tag values updated successfully"
     );
   } catch (err) {
     console.error("❌ Error executing query:", err);
-    return middlewares.standardResponse(res, null, 500, "Error occurred while updating mould data: " + err.message);
+    return middlewares.standardResponse(res, null, 500, "Error: " + err.message);
   }
 });
 
