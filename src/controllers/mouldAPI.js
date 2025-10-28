@@ -191,7 +191,7 @@ router.post("/updateValidationStatusLoad", async (req, res) => {
     let exeOutput = null;
     let apiResponseData = null;
 
-    if (EquipmentName.includes("Shibura")) {
+    if (EquipmentName.includes("Shibaura")) {
       // Shibura → DB + Binary, skip tag
       const exePath = "D:\\ToshibaIntegrationTesting\\Application\\Write2Machine\\Debug\\Debug\\ToshibaLocal2Machines.exe";
       const validationStatus = "1";
@@ -206,7 +206,7 @@ router.post("/updateValidationStatusLoad", async (req, res) => {
         });
 
       exeOutput = await runExe();
-      console.log("✅ Binary executed for Shibura machine, skipping tag update");
+      console.log("✅ Binary executed for Shibaura machine, skipping tag update");
     } else {
       // Non-Shibura → DB + Tag, skip binary
       if (machineTag) {
@@ -335,7 +335,7 @@ router.post("/updateValidationStatUnload", async (req, res) => {
     let exeOutput = null;
     let apiResponseData = null;
 
-    if (EquipmentName.includes("Shibura")) {
+    if (EquipmentName.includes("Shibaura")) {
       // ✅ Shibura → DB + Binary only
       const exePath = "D:\\ToshibaIntegrationTesting\\Application\\Write2Machine\\Debug\\Debug\\ToshibaLocal2Machines.exe";
       const validationStatus = "0";
@@ -654,7 +654,7 @@ router.post("/addbreakdownlog", async (req, res) => {
     await monitoringRequest
       .input('MouldStatus', sqlConnection.sql.Int, MouldStatus)
       .input('MouldLifeStatus', sqlConnection.sql.NVarChar, MouldLifeStatus)
-      .input('EquipmentID', sqlConnection.sql.BigInt, EquipmentID)
+      .input('EquipmentID', sqlConnection.sql.NVarChar, EquipmentID)
       .input('MouldID', sqlConnection.sql.NVarChar, MouldID)
       .query(`
         SET ANSI_WARNINGS OFF;
@@ -986,7 +986,7 @@ router.post("/load", async (req, res) => {
     }
 
     // 🔹 Skip PLC Tag Update for Shibura Machines
-    if (EquipmentName && EquipmentName.toLowerCase().includes("shibura")) {
+    if (EquipmentName && EquipmentName.includes("Shibaura")) {
       return middlewares.standardResponse(
         res,
         { updatedTags: [], apiResponse: null, EquipmentName },
