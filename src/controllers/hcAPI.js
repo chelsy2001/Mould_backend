@@ -4,26 +4,42 @@ const middlewares = require("../middlewares/middlewares.js");
 
 const router = express.Router();
 
+// router.patch("/update", (request, response) => {
+//   new sqlConnection.sql.Request().query(
+//     `EXEC [SP_OnHCConfirmationButton] @MouldID = ${request.body.MouldID};`,
+//     (err, result) => {
+//       if (err) {
+//         middlewares.standardResponse(
+//           response,
+//           null,
+//           300,
+//           "Error executing query: " + err
+//         );
+//         console.error("Error executing query:", err);
+//       } else {
+//         middlewares.standardResponse(
+//           response,
+//           result.recordset,
+//           200,
+//           "success"
+//         );
+//         console.dir(result.recordset);
+//       }
+//     }
+//   );
+// });
+
+
 router.patch("/update", (request, response) => {
+  const { mouldId } = request.body;
   new sqlConnection.sql.Request().query(
-    `EXEC [SP_OnHCConfirmationButton] @MouldID = ${request.body.MouldID};`,
+    `EXEC [SP_OnHCConfirmationButton] @MouldID = '${mouldId}';`,
     (err, result) => {
       if (err) {
-        middlewares.standardResponse(
-          response,
-          null,
-          300,
-          "Error executing query: " + err
-        );
         console.error("Error executing query:", err);
+        middlewares.standardResponse(response, null, 300, "Error executing query: " + err);
       } else {
-        middlewares.standardResponse(
-          response,
-          result.recordset,
-          200,
-          "success"
-        );
-        console.dir(result.recordset);
+        middlewares.standardResponse(response, result.recordset, 200, "success");
       }
     }
   );
