@@ -950,20 +950,28 @@ router.post("/load", async (req, res) => {
       // 🔹 Update existing record
       await dbReq.query(`
         UPDATE M
-        SET 
-            M.MouldStatus = @MouldStatus,
-            M.MouldLifeStatus = @MouldLifeStatus,
-            M.LastUpdatedTime = GETDATE(),
-            M.MouldActualLife = @NewMouldLife
-        FROM [PPMS_LILBawal].[dbo].[Mould_Monitoring] M
-        WHERE EquipmentID = @EquipmentID AND MouldID = @MouldID;
+SET 
+    M.MouldStatus = @MouldStatus,
+    M.MouldLifeStatus = @MouldLifeStatus,
+    M.MouldInstanceLife = D.Total_Shots,
+    M.MouldCurrentLife = D.Total_Shots,
+    M.LastUpdatedTime = GETDATE()
+FROM [PPMS_LILBawal].[dbo].[Mould_Monitoring] M
+LEFT JOIN [PPMS_LILBawal].[dbo].[Machine_Data] D
+    ON M.EquipmentID COLLATE SQL_Latin1_General_CP1_CI_AS = D.Machine_ID COLLATE SQL_Latin1_General_CP1_CI_AS
+    OR M.MouldID COLLATE SQL_Latin1_General_CP1_CI_AS = D.Mould_ID COLLATE SQL_Latin1_General_CP1_CI_AS
+WHERE M.EquipmentID = @EquipmentID 
+  AND M.MouldID = @MouldID;
 
-        INSERT INTO [PPMS_LILBawal].[dbo].[Mould_Genealogy]
+  INSERT INTO [PPMS_LILBawal].[dbo].[Mould_Genealogy]
         VALUES (@MouldID, @CurrentMouldLife, @ParameterID, @ParameterValue, GETDATE());
 
-        UPDATE [PPMS_LILBawal].[dbo].[CONFIG_MOULD]
-        SET MouldStatus = @MouldStatus, LastUpdatedTime = GETDATE()
-        WHERE MouldID = @MouldID;
+UPDATE [PPMS_LILBawal].[dbo].[CONFIG_MOULD]
+SET 
+    MouldStatus = @MouldStatus, 
+    LastUpdatedTime = GETDATE()
+WHERE MouldID = @MouldID;
+
       `);
     } else {
       // 🔹 Insert new record
@@ -984,7 +992,12 @@ router.post("/load", async (req, res) => {
         WHERE MouldID = @MouldID;
       `);
     }
-
+// 🔹 Call the Stored Procedure after update/insert
+    const spReq = new sqlConnection.sql.Request();
+    spReq.input("MouldID", sqlConnection.sql.NVarChar, MouldID);
+    spReq.input("EquipmentID", sqlConnection.sql.NVarChar, EquipmentID);
+    await spReq.execute("[dbo].[ShiftEvent_MachineDataUpdate]");
+    console.log("✅ Called Stored Procedure ShiftEvent_MachineDataUpdate");
     // 🔹 Skip PLC Tag Update for Shibura Machines
     if (EquipmentName && EquipmentName.includes("Shibaura")) {
       return middlewares.standardResponse(
