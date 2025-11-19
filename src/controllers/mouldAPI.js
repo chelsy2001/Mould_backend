@@ -97,6 +97,147 @@ router.post("/update", (request, response) => {
 const { execFile } = require("child_process");
 
 
+// router.post("/updateValidationStatusLoad", async (req, res) => {
+//   const { EquipmentID, mouldID } = req.body;
+
+//   if (!EquipmentID || !mouldID) {
+//     return middlewares.standardResponse(res, null, 400, "Missing required fields");
+//   }
+
+//   try {
+//     const request = new sqlConnection.sql.Request();
+
+//     // 1️⃣ Get StationID and EquipmentName from Config_Equipment
+//     request.input("EquipmentID", sqlConnection.sql.NVarChar, EquipmentID);
+//     const equipmentResult = await request.query(`
+//       SELECT TOP 1 StationID, EquipmentName 
+//       FROM Config_Equipment 
+//       WHERE EquipmentID = @EquipmentID
+//     `);
+
+//     if (!equipmentResult.recordset.length) {
+//       return middlewares.standardResponse(res, null, 404, `EquipmentID not found in DB: ${EquipmentID}`);
+//     }
+
+//     const { StationID, EquipmentName } = equipmentResult.recordset[0];
+
+//     // 2️⃣ Get ProdDate & ProdShift from Prod_ShiftInformation
+//     const prodShiftResult = await new sqlConnection.sql.Request()
+//       .input("StationID", sqlConnection.sql.Int, StationID)
+//       .query(`
+//         SELECT TOP 1 ProdDate, ShiftName
+//         FROM Prod_ShiftInformation
+//         WHERE StationID = @StationID
+//         ORDER BY ProdDate DESC
+//       `);
+
+//     const ProdDate = prodShiftResult.recordset[0]?.ProdDate || null;
+//     const ProdShift = prodShiftResult.recordset[0]?.ShiftName || null;
+
+//     // 3️⃣ Get AtMouldLife from Mould_Monitoring
+//     const mouldLifeResult = await new sqlConnection.sql.Request()
+//       .input("MouldID", sqlConnection.sql.NVarChar, mouldID)
+//       .input("EquipmentID", sqlConnection.sql.NVarChar, EquipmentID)
+//       .query(`
+//         SELECT TOP 1 MouldActualLife
+//         FROM Mould_Monitoring
+//         WHERE MouldID = @MouldID AND EquipmentID = @EquipmentID
+//         ORDER BY UID DESC
+//       `);
+
+//     const AtMouldLife = mouldLifeResult.recordset[0]?.MouldActualLife || 0;
+
+//     // 4️⃣ Map StationID → Machine Tag
+//     const stationTagMap = {
+//       "1": "ac:PPMS_SolutionLIL/ScadaToPLC/Machine-1/ValidationStatus",
+//       "2": "ac:PPMS_SolutionLIL/ScadaToPLC/Machine-2/ValidationStatus",
+//       "3": "ac:PPMS_SolutionLIL/ScadaToPLC/Machine-3/ValidationStatus",
+//       "4": "ac:PPMS_SolutionLIL/ScadaToPLC/Machine-4/ValidationStatus",
+//       "5": "ac:PPMS_SolutionLIL/ScadaToPLC/Machine-5/ValidationStatus",
+//       "6": "ac:PPMS_SolutionLIL/ScadaToPLC/Machine-6/ValidationStatus",
+//       "7": "ac:PPMS_SolutionLIL/ScadaToPLC/Machine-7/ValidationStatus",
+//       "8": "ac:PPMS_SolutionLIL/ScadaToPLC/Machine-8/ValidationStatus",
+//       "9": "ac:PPMS_SolutionLIL/ScadaToPLC/Machine-9/ValidationStatus",
+//       "10": "ac:PPMS_SolutionLIL/ScadaToPLC/Machine-10/ValidationStatus",
+//     };
+
+//     const machineTag = stationTagMap[StationID];
+
+//     // 5️⃣ Update Mould_MachineMatrix & Insert into Mould_EquipmentLog
+//     const updateAndInsertQuery = `
+//       BEGIN TRANSACTION;
+//         UPDATE Mould_MachineMatrix
+//         SET ValidationStatus = 1,
+//             LastUpdatedTime = GETDATE(),
+//             LastUpdatedBy = 'system'
+//         WHERE EquipmentID = @EquipmentID AND MouldID = @MouldID;
+
+//         INSERT INTO Mould_EquipmentLog
+//         (MouldID, EquipmentID, ValidationStatus, ProdDate, ProdShift, AtMouldLife, Timestamp)
+//         VALUES (@MouldID, @EquipmentID, 1, @ProdDate, @ProdShift, @AtMouldLife, GETDATE());
+//       COMMIT;
+//     `;
+
+//     const updateRequest = new sqlConnection.sql.Request();
+//     updateRequest.input("EquipmentID", sqlConnection.sql.NVarChar, EquipmentID);
+//     updateRequest.input("MouldID", sqlConnection.sql.NVarChar, mouldID);
+//     updateRequest.input("ProdDate", sqlConnection.sql.Date, ProdDate);
+//     updateRequest.input("ProdShift", sqlConnection.sql.NVarChar, ProdShift);
+//     updateRequest.input("AtMouldLife", sqlConnection.sql.Int, AtMouldLife);
+
+//     const dbResult = await updateRequest.query(updateAndInsertQuery);
+//     console.log("✅ Database updated successfully");
+
+//     let exeOutput = null;
+//     let apiResponseData = null;
+
+//     if (EquipmentName.includes("Shibaura")) {
+//       // Shibura → DB + Binary, skip tag
+//       const exePath = "D:\\ToshibaIntegrationTesting\\Application\\Write2Machine\\Debug\\Debug\\ToshibaLocal2Machines.exe";
+//       const validationStatus = "1";
+//       const exeArgs = [EquipmentID, mouldID, validationStatus];
+
+//       const runExe = () =>
+//         new Promise((resolve, reject) => {
+//           execFile(exePath, exeArgs, (error, stdout, stderr) => {
+//             if (error) return reject(stderr || error.message);
+//             resolve(stdout || stderr);
+//           });
+//         });
+
+//       exeOutput = await runExe();
+//       console.log("✅ Binary executed for Shibaura machine, skipping tag update");
+//     } else {
+//       // Non-Shibura → DB + Tag, skip binary
+//       if (machineTag) {
+//         const timestamp = new Date().toISOString();
+//         const payload = [{ pointName: machineTag, timestamp, quality: 9, value: 1 }];
+//         const credentials = base64.encode("Chelsy:Dalisoft@123");
+
+//         const apiResponse = await axios.post(
+//           "http://DESKTOP-T266BV5/ODataConnector/rest/RealtimeData/Write",
+//           payload,
+//           { headers: { Authorization: `Basic ${credentials}`, "Content-Type": "application/json" } }
+//         );
+
+//         apiResponseData = apiResponse.data;
+//         console.log("✅ Tag updated for non-Shibura machine");
+//       }
+//     }
+
+//     return middlewares.standardResponse(
+//       res,
+//       { dbUpdate: dbResult.rowsAffected, exeOutput, apiResponse: apiResponseData },
+//       200,
+//       "ValidationStatus updated successfully with conditional execution"
+//     );
+
+//   } catch (err) {
+//     console.error("❌ Error in process:", err);
+//     return middlewares.standardResponse(res, { error: err.message }, 500, "Error occurred while updating ValidationStatus or machine tag");
+//   }
+// });
+
 router.post("/updateValidationStatusLoad", async (req, res) => {
   const { EquipmentID, mouldID } = req.body;
 
@@ -105,10 +246,55 @@ router.post("/updateValidationStatusLoad", async (req, res) => {
   }
 
   try {
-    const request = new sqlConnection.sql.Request();
+    // **********************************************
+    // 0️⃣ VALIDATION CHECK – BLOCK MULTIPLE VALID MOULDS FOR SAME EQUIPMENT
+    // **********************************************
+    const validationCheck = await new sqlConnection.sql.Request()
+      .input("EquipmentID", sqlConnection.sql.NVarChar, EquipmentID)
+      .query(`
+        SELECT TOP 1 MouldID 
+        FROM Mould_MachineMatrix
+        WHERE EquipmentID = @EquipmentID AND ValidationStatus = 1
+      `);
 
-    // 1️⃣ Get StationID and EquipmentName from Config_Equipment
+    if (validationCheck.recordset.length > 0) {
+      const alreadyValidated = validationCheck.recordset[0].MouldID;
+
+     return res.status(403).json({
+  success: false,
+  message: `Machine ${EquipmentID} already has a validated mould (${alreadyValidated}).`
+});
+    }
+
+    // **********************************************
+    // 0️⃣.2 VALIDATION – CHECK IF SAME MOULD RUNNING IN ANOTHER EQUIPMENT
+    // **********************************************
+    const mouldRunningElsewhere = await new sqlConnection.sql.Request()
+      .input("MouldID", sqlConnection.sql.NVarChar, mouldID)
+      .input("EquipmentID", sqlConnection.sql.NVarChar, EquipmentID)
+      .query(`
+        SELECT TOP 1 EquipmentID 
+        FROM Mould_MachineMatrix
+        WHERE MouldID = @MouldID 
+          AND ValidationStatus = 1
+          AND EquipmentID <> @EquipmentID
+      `);
+
+    if (mouldRunningElsewhere.recordset.length > 0) {
+      const otherEquipment = mouldRunningElsewhere.recordset[0].EquipmentID;
+
+     return res.status(403).json({
+  success: false,
+  message: `❌ This mould is already running on Machine ${otherEquipment}. Please unload it from that machine before validating here.`
+});
+    }
+
+    // --------------------------------------------------
+    // 1️⃣ Get StationID, EquipmentName from Config_Equipment
+    // --------------------------------------------------
+    const request = new sqlConnection.sql.Request();
     request.input("EquipmentID", sqlConnection.sql.NVarChar, EquipmentID);
+
     const equipmentResult = await request.query(`
       SELECT TOP 1 StationID, EquipmentName 
       FROM Config_Equipment 
@@ -121,7 +307,9 @@ router.post("/updateValidationStatusLoad", async (req, res) => {
 
     const { StationID, EquipmentName } = equipmentResult.recordset[0];
 
-    // 2️⃣ Get ProdDate & ProdShift from Prod_ShiftInformation
+    // --------------------------------------------------
+    // 2️⃣ Fetch ProdDate & ProdShift
+    // --------------------------------------------------
     const prodShiftResult = await new sqlConnection.sql.Request()
       .input("StationID", sqlConnection.sql.Int, StationID)
       .query(`
@@ -134,7 +322,9 @@ router.post("/updateValidationStatusLoad", async (req, res) => {
     const ProdDate = prodShiftResult.recordset[0]?.ProdDate || null;
     const ProdShift = prodShiftResult.recordset[0]?.ShiftName || null;
 
-    // 3️⃣ Get AtMouldLife from Mould_Monitoring
+    // --------------------------------------------------
+    // 3️⃣ Fetch AtMouldLife
+    // --------------------------------------------------
     const mouldLifeResult = await new sqlConnection.sql.Request()
       .input("MouldID", sqlConnection.sql.NVarChar, mouldID)
       .input("EquipmentID", sqlConnection.sql.NVarChar, EquipmentID)
@@ -147,7 +337,9 @@ router.post("/updateValidationStatusLoad", async (req, res) => {
 
     const AtMouldLife = mouldLifeResult.recordset[0]?.MouldActualLife || 0;
 
-    // 4️⃣ Map StationID → Machine Tag
+    // --------------------------------------------------
+    // 4️⃣ Tag Mapping
+    // --------------------------------------------------
     const stationTagMap = {
       "1": "ac:PPMS_SolutionLIL/ScadaToPLC/Machine-1/ValidationStatus",
       "2": "ac:PPMS_SolutionLIL/ScadaToPLC/Machine-2/ValidationStatus",
@@ -163,7 +355,9 @@ router.post("/updateValidationStatusLoad", async (req, res) => {
 
     const machineTag = stationTagMap[StationID];
 
-    // 5️⃣ Update Mould_MachineMatrix & Insert into Mould_EquipmentLog
+    // --------------------------------------------------
+    // 5️⃣ Update Matrix & Insert Log
+    // --------------------------------------------------
     const updateAndInsertQuery = `
       BEGIN TRANSACTION;
         UPDATE Mould_MachineMatrix
@@ -186,29 +380,28 @@ router.post("/updateValidationStatusLoad", async (req, res) => {
     updateRequest.input("AtMouldLife", sqlConnection.sql.Int, AtMouldLife);
 
     const dbResult = await updateRequest.query(updateAndInsertQuery);
-    console.log("✅ Database updated successfully");
 
     let exeOutput = null;
     let apiResponseData = null;
 
+    // --------------------------------------------------
+    // 6️⃣ SHIBAURA case → Run EXE only
+    // --------------------------------------------------
     if (EquipmentName.includes("Shibaura")) {
-      // Shibura → DB + Binary, skip tag
       const exePath = "D:\\ToshibaIntegrationTesting\\Application\\Write2Machine\\Debug\\Debug\\ToshibaLocal2Machines.exe";
-      const validationStatus = "1";
-      const exeArgs = [EquipmentID, mouldID, validationStatus];
+      const exeArgs = [EquipmentID, mouldID, "1"];
 
-      const runExe = () =>
-        new Promise((resolve, reject) => {
-          execFile(exePath, exeArgs, (error, stdout, stderr) => {
-            if (error) return reject(stderr || error.message);
-            resolve(stdout || stderr);
-          });
+      exeOutput = await new Promise((resolve, reject) => {
+        execFile(exePath, exeArgs, (error, stdout, stderr) => {
+          if (error) return reject(stderr || error.message);
+          resolve(stdout || stderr);
         });
+      });
 
-      exeOutput = await runExe();
-      console.log("✅ Binary executed for Shibaura machine, skipping tag update");
     } else {
-      // Non-Shibura → DB + Tag, skip binary
+      // --------------------------------------------------
+      // 7️⃣ NON–SHIBAURA → Write Tag Only
+      // --------------------------------------------------
       if (machineTag) {
         const timestamp = new Date().toISOString();
         const payload = [{ pointName: machineTag, timestamp, quality: 9, value: 1 }];
@@ -221,10 +414,12 @@ router.post("/updateValidationStatusLoad", async (req, res) => {
         );
 
         apiResponseData = apiResponse.data;
-        console.log("✅ Tag updated for non-Shibura machine");
       }
     }
 
+    // --------------------------------------------------
+    // 8️⃣ Final Response
+    // --------------------------------------------------
     return middlewares.standardResponse(
       res,
       { dbUpdate: dbResult.rowsAffected, exeOutput, apiResponse: apiResponseData },
@@ -233,13 +428,160 @@ router.post("/updateValidationStatusLoad", async (req, res) => {
     );
 
   } catch (err) {
-    console.error("❌ Error in process:", err);
-    return middlewares.standardResponse(res, { error: err.message }, 500, "Error occurred while updating ValidationStatus or machine tag");
-  }
+  console.error("❌ Error in process:", err);
+
+  // Force proper axios error response structure
+  return res.status(500).json({
+    success: false,
+    message: "Error occurred while updating ValidationStatus or machine tag",
+    error: err.message || "Unknown error",
+  });
+}
 });
 
 
 
+
+// router.post("/updateValidationStatUnload", async (req, res) => {
+//   const { EquipmentID, mouldID } = req.body;
+
+//   if (!EquipmentID || !mouldID) {
+//     return middlewares.standardResponse(res, null, 400, "Missing required fields");
+//   }
+
+//   try {
+//     const request = new sqlConnection.sql.Request();
+
+//     // 1️⃣ Get StationID & EquipmentName from Config_Equipment
+//     request.input("EquipmentID", sqlConnection.sql.NVarChar, EquipmentID);
+//     const equipmentResult = await request.query(`
+//       SELECT TOP 1 StationID, EquipmentName 
+//       FROM Config_Equipment 
+//       WHERE EquipmentID = @EquipmentID
+//     `);
+
+//     if (!equipmentResult.recordset.length) {
+//       return middlewares.standardResponse(res, null, 404, `EquipmentID not found in DB: ${EquipmentID}`);
+//     }
+
+//     const { StationID, EquipmentName } = equipmentResult.recordset[0];
+
+//     // 2️⃣ Get ProdDate & ProdShift from Prod_ShiftInformation
+//     const prodShiftResult = await new sqlConnection.sql.Request()
+//       .input("StationID", sqlConnection.sql.Int, StationID)
+//       .query(`
+//         SELECT TOP 1 ProdDate, ShiftName
+//         FROM Prod_ShiftInformation
+//         WHERE StationID = @StationID
+//         ORDER BY ProdDate DESC
+//       `);
+
+//     const ProdDate = prodShiftResult.recordset[0]?.ProdDate || null;
+//     const ProdShift = prodShiftResult.recordset[0]?.ShiftName || null;
+
+//     // 3️⃣ Get AtMouldLife from Mould_Monitoring
+//     const mouldLifeResult = await new sqlConnection.sql.Request()
+//       .input("MouldID", sqlConnection.sql.NVarChar, mouldID)
+//       .input("EquipmentID", sqlConnection.sql.NVarChar, EquipmentID)
+//       .query(`
+//         SELECT TOP 1 MouldActualLife
+//         FROM Mould_Monitoring
+//         WHERE MouldID = @MouldID AND EquipmentID = @EquipmentID
+//         ORDER BY UID DESC
+//       `);
+
+//     const AtMouldLife = mouldLifeResult.recordset[0]?.MouldActualLife || 0;
+
+//     // 4️⃣ Map StationID → Machine Tag
+//     const stationTagMap = {
+//       "1": "ac:PPMS_SolutionLIL/ScadaToPLC/Machine-1/ValidationStatus",
+//       "2": "ac:PPMS_SolutionLIL/ScadaToPLC/Machine-2/ValidationStatus",
+//       "3": "ac:PPMS_SolutionLIL/ScadaToPLC/Machine-3/ValidationStatus",
+//       "4": "ac:PPMS_SolutionLIL/ScadaToPLC/Machine-4/ValidationStatus",
+//       "5": "ac:PPMS_SolutionLIL/ScadaToPLC/Machine-5/ValidationStatus",
+//       "6": "ac:PPMS_SolutionLIL/ScadaToPLC/Machine-6/ValidationStatus",
+//       "7": "ac:PPMS_SolutionLIL/ScadaToPLC/Machine-7/ValidationStatus",
+//       "8": "ac:PPMS_SolutionLIL/ScadaToPLC/Machine-8/ValidationStatus",
+//       "9": "ac:PPMS_SolutionLIL/ScadaToPLC/Machine-9/ValidationStatus",
+//       "10": "ac:PPMS_SolutionLIL/ScadaToPLC/Machine-10/ValidationStatus",
+//     };
+
+//     const machineTag = stationTagMap[StationID];
+
+//     // 5️⃣ Update Mould_MachineMatrix & Insert into Mould_EquipmentLog (ValidationStatus = 0)
+//     const updateAndInsertQuery = `
+//       BEGIN TRANSACTION;
+//         UPDATE Mould_MachineMatrix
+//         SET ValidationStatus = 0,
+//             LastUpdatedTime = GETDATE(),
+//             LastUpdatedBy = 'system'
+//         WHERE EquipmentID = @EquipmentID AND MouldID = @MouldID;
+
+//         INSERT INTO Mould_EquipmentLog
+//         (MouldID, EquipmentID, ValidationStatus, ProdDate, ProdShift, AtMouldLife, Timestamp)
+//         VALUES (@MouldID, @EquipmentID, 0, @ProdDate, @ProdShift, @AtMouldLife, GETDATE());
+//       COMMIT;
+//     `;
+
+//     const updateRequest = new sqlConnection.sql.Request();
+//     updateRequest.input("EquipmentID", sqlConnection.sql.NVarChar, EquipmentID);
+//     updateRequest.input("MouldID", sqlConnection.sql.NVarChar, mouldID);
+//     updateRequest.input("ProdDate", sqlConnection.sql.Date, ProdDate);
+//     updateRequest.input("ProdShift", sqlConnection.sql.NVarChar, ProdShift);
+//     updateRequest.input("AtMouldLife", sqlConnection.sql.Int, AtMouldLife);
+
+//     const dbResult = await updateRequest.query(updateAndInsertQuery);
+//     console.log("✅ Database updated successfully (ValidationStatus = 0)");
+
+//     let exeOutput = null;
+//     let apiResponseData = null;
+
+//     if (EquipmentName.includes("Shibaura")) {
+//       // ✅ Shibura → DB + Binary only
+//       const exePath = "D:\\ToshibaIntegrationTesting\\Application\\Write2Machine\\Debug\\Debug\\ToshibaLocal2Machines.exe";
+//       const validationStatus = "0";
+//       const exeArgs = [EquipmentID, mouldID, validationStatus];
+
+//       const runExe = () =>
+//         new Promise((resolve, reject) => {
+//           execFile(exePath, exeArgs, (error, stdout, stderr) => {
+//             if (error) return reject(stderr || error.message);
+//             resolve(stdout || stderr);
+//           });
+//         });
+
+//       exeOutput = await runExe();
+//       console.log("✅ Binary executed for Shibura machine, skipping tag update");
+//     } else {
+//       // ✅ Non-Shibura → DB + Tag only
+//       if (machineTag) {
+//         const timestamp = new Date().toISOString();
+//         const payload = [{ pointName: machineTag, timestamp, quality: 9, value: 0 }];
+//         const credentials = base64.encode("Chelsy:Dalisoft@123");
+
+//         const apiResponse = await axios.post(
+//           "http://DESKTOP-T266BV5/ODataConnector/rest/RealtimeData/Write",
+//           payload,
+//           { headers: { Authorization: `Basic ${credentials}`, "Content-Type": "application/json" } }
+//         );
+
+//         apiResponseData = apiResponse.data;
+//         console.log("✅ Tag updated for non-Shibura machine, skipping binary execution");
+//       }
+//     }
+
+//     return middlewares.standardResponse(
+//       res,
+//       { dbUpdate: dbResult.rowsAffected, exeOutput, apiResponse: apiResponseData },
+//       200,
+//       "ValidationStatus unloaded successfully with conditional execution"
+//     );
+
+//   } catch (err) {
+//     console.error("❌ Error in unloading process:", err);
+//     return middlewares.standardResponse(res, { error: err.message }, 500, "Error occurred while unloading ValidationStatus or updating machine tag");
+//   }
+// });
 
 router.post("/updateValidationStatUnload", async (req, res) => {
   const { EquipmentID, mouldID } = req.body;
@@ -249,10 +591,36 @@ router.post("/updateValidationStatUnload", async (req, res) => {
   }
 
   try {
-    const request = new sqlConnection.sql.Request();
 
-    // 1️⃣ Get StationID & EquipmentName from Config_Equipment
+    // --------------------------------------------------
+    // 0️⃣ ❗ ALLOW UNLOAD ONLY IF THIS MOULD IS VALIDATED (Status = 1)
+    // --------------------------------------------------
+    const validateCheck = await new sqlConnection.sql.Request()
+      .input("EquipmentID", sqlConnection.sql.NVarChar, EquipmentID)
+      .input("MouldID", sqlConnection.sql.NVarChar, mouldID)
+      .query(`
+        SELECT TOP 1 *
+        FROM Mould_MachineMatrix
+        WHERE EquipmentID = @EquipmentID 
+          AND MouldID = @MouldID
+          AND ValidationStatus = 1
+      `);
+
+    if (validateCheck.recordset.length === 0) {
+      return middlewares.standardResponse(
+        res,
+        null,
+        403,
+        `⚠ Mould ${mouldID} is not in Production on Equipment ${EquipmentID}. Only validated mould can be unloaded.`
+      );
+    }
+
+    // --------------------------------------------------
+    // 1️⃣ Get StationID & EquipmentName
+    // --------------------------------------------------
+    const request = new sqlConnection.sql.Request();
     request.input("EquipmentID", sqlConnection.sql.NVarChar, EquipmentID);
+
     const equipmentResult = await request.query(`
       SELECT TOP 1 StationID, EquipmentName 
       FROM Config_Equipment 
@@ -265,7 +633,9 @@ router.post("/updateValidationStatUnload", async (req, res) => {
 
     const { StationID, EquipmentName } = equipmentResult.recordset[0];
 
-    // 2️⃣ Get ProdDate & ProdShift from Prod_ShiftInformation
+    // --------------------------------------------------
+    // 2️⃣ Get ProdDate & ProdShift
+    // --------------------------------------------------
     const prodShiftResult = await new sqlConnection.sql.Request()
       .input("StationID", sqlConnection.sql.Int, StationID)
       .query(`
@@ -278,7 +648,9 @@ router.post("/updateValidationStatUnload", async (req, res) => {
     const ProdDate = prodShiftResult.recordset[0]?.ProdDate || null;
     const ProdShift = prodShiftResult.recordset[0]?.ShiftName || null;
 
-    // 3️⃣ Get AtMouldLife from Mould_Monitoring
+    // --------------------------------------------------
+    // 3️⃣ Get AtMouldLife
+    // --------------------------------------------------
     const mouldLifeResult = await new sqlConnection.sql.Request()
       .input("MouldID", sqlConnection.sql.NVarChar, mouldID)
       .input("EquipmentID", sqlConnection.sql.NVarChar, EquipmentID)
@@ -291,7 +663,9 @@ router.post("/updateValidationStatUnload", async (req, res) => {
 
     const AtMouldLife = mouldLifeResult.recordset[0]?.MouldActualLife || 0;
 
-    // 4️⃣ Map StationID → Machine Tag
+    // --------------------------------------------------
+    // 4️⃣ Machine tag map
+    // --------------------------------------------------
     const stationTagMap = {
       "1": "ac:PPMS_SolutionLIL/ScadaToPLC/Machine-1/ValidationStatus",
       "2": "ac:PPMS_SolutionLIL/ScadaToPLC/Machine-2/ValidationStatus",
@@ -307,7 +681,9 @@ router.post("/updateValidationStatUnload", async (req, res) => {
 
     const machineTag = stationTagMap[StationID];
 
-    // 5️⃣ Update Mould_MachineMatrix & Insert into Mould_EquipmentLog (ValidationStatus = 0)
+    // --------------------------------------------------
+    // 5️⃣ Update DB (ValidationStatus = 0)
+    // --------------------------------------------------
     const updateAndInsertQuery = `
       BEGIN TRANSACTION;
         UPDATE Mould_MachineMatrix
@@ -330,58 +706,54 @@ router.post("/updateValidationStatUnload", async (req, res) => {
     updateRequest.input("AtMouldLife", sqlConnection.sql.Int, AtMouldLife);
 
     const dbResult = await updateRequest.query(updateAndInsertQuery);
-    console.log("✅ Database updated successfully (ValidationStatus = 0)");
 
     let exeOutput = null;
     let apiResponseData = null;
 
+    // --------------------------------------------------
+    // 6️⃣ Shibaura → EXE only
+    // --------------------------------------------------
     if (EquipmentName.includes("Shibaura")) {
-      // ✅ Shibura → DB + Binary only
       const exePath = "D:\\ToshibaIntegrationTesting\\Application\\Write2Machine\\Debug\\Debug\\ToshibaLocal2Machines.exe";
-      const validationStatus = "0";
-      const exeArgs = [EquipmentID, mouldID, validationStatus];
+      const exeArgs = [EquipmentID, mouldID, "0"];
 
-      const runExe = () =>
-        new Promise((resolve, reject) => {
-          execFile(exePath, exeArgs, (error, stdout, stderr) => {
-            if (error) return reject(stderr || error.message);
-            resolve(stdout || stderr);
-          });
+      exeOutput = await new Promise((resolve, reject) => {
+        execFile(exePath, exeArgs, (error, stdout, stderr) => {
+          if (error) return reject(stderr || error.message);
+          resolve(stdout || stderr);
         });
+      });
+    }
 
-      exeOutput = await runExe();
-      console.log("✅ Binary executed for Shibura machine, skipping tag update");
-    } else {
-      // ✅ Non-Shibura → DB + Tag only
-      if (machineTag) {
-        const timestamp = new Date().toISOString();
-        const payload = [{ pointName: machineTag, timestamp, quality: 9, value: 0 }];
-        const credentials = base64.encode("Chelsy:Dalisoft@123");
+    // --------------------------------------------------
+    // 7️⃣ Non-Shibaura → Tag only
+    // --------------------------------------------------
+    else if (machineTag) {
+      const timestamp = new Date().toISOString();
+      const payload = [{ pointName: machineTag, timestamp, quality: 9, value: 0 }];
+      const credentials = base64.encode("Chelsy:Dalisoft@123");
 
-        const apiResponse = await axios.post(
-          "http://DESKTOP-T266BV5/ODataConnector/rest/RealtimeData/Write",
-          payload,
-          { headers: { Authorization: `Basic ${credentials}`, "Content-Type": "application/json" } }
-        );
+      const apiResponse = await axios.post(
+        "http://DESKTOP-T266BV5/ODataConnector/rest/RealtimeData/Write",
+        payload,
+        { headers: { Authorization: `Basic ${credentials}`, "Content-Type": "application/json" } }
+      );
 
-        apiResponseData = apiResponse.data;
-        console.log("✅ Tag updated for non-Shibura machine, skipping binary execution");
-      }
+      apiResponseData = apiResponse.data;
     }
 
     return middlewares.standardResponse(
       res,
       { dbUpdate: dbResult.rowsAffected, exeOutput, apiResponse: apiResponseData },
       200,
-      "ValidationStatus unloaded successfully with conditional execution"
+      "ValidationStatus unloaded successfully"
     );
 
   } catch (err) {
-    console.error("❌ Error in unloading process:", err);
-    return middlewares.standardResponse(res, { error: err.message }, 500, "Error occurred while unloading ValidationStatus or updating machine tag");
+    return middlewares.standardResponse(res, { error: err.message }, 500,
+      "Error occurred while unloading ValidationStatus");
   }
 });
-
 
 
 
