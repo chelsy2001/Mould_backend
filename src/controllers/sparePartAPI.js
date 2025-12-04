@@ -9,12 +9,14 @@ const router = express.Router();
 // 1️⃣ Get Spare Part Categories by MouldID
 router.get("/categories/:mouldid", (req, res) => {
   const { mouldid } = req.params;
-  new sqlConnection.sql.Request().query(
-    `SELECT DISTINCT spc.SparePartCategoryID, spc.SparePartCategoryName
+
+  const request = new sqlConnection.sql.Request();
+  request.input("mouldid", sqlConnection.sql.VarChar, mouldid);
+
+  request.query(
+    `SELECT DISTINCT spc.SparePartCategory
      FROM Config_SparePartCategory spc
-     JOIN Config_Mould_SparePart sp ON sp.SparePartCategoryID = spc.SparePartCategoryID
-     JOIN Config_Mould m ON m.MouldGroupID = sp.MouldGroupID
-     WHERE m.MouldID = '${mouldid}'`,
+     WHERE spc.MouldID = @mouldid`,
     (err, result) => {
       if (err) {
         middlewares.standardResponse(res, null, 300, "Query Error: " + err);
@@ -25,13 +27,22 @@ router.get("/categories/:mouldid", (req, res) => {
   );
 });
 
+
 // 2️⃣ Get Spare Part Names by SparePartCategoryID
-router.get("/parts/by-category/:categoryid", (req, res) => {
-  const { categoryid } = req.params;
-  new sqlConnection.sql.Request().query(
-    `SELECT SparePartID, SparePartName 
-     FROM Config_Mould_SparePart
-     WHERE SparePartCategoryID = ${categoryid}`,
+router.get("/parts/by-category/:mouldid/:category", (req, res) => {
+  const { mouldid, category } = req.params;
+
+  const request = new sqlConnection.sql.Request();
+  request.input("mouldid", sqlConnection.sql.VarChar, mouldid);
+  request.input("category", sqlConnection.sql.VarChar, category);
+
+  request.query(
+    `SELECT ms.SparePartID, ms.SparePartName
+     FROM Config_Mould_SparePart AS ms
+     JOIN Config_SparePartCategory AS spc 
+       ON ms.SparePartID = spc.SparePartID
+     WHERE spc.MouldID = @mouldid
+       AND spc.SparePartCategory = @category`,
     (err, result) => {
       if (err) {
         middlewares.standardResponse(res, null, 300, "Query Error: " + err);
@@ -42,29 +53,14 @@ router.get("/parts/by-category/:categoryid", (req, res) => {
   );
 });
 
-// 2️⃣ Get Spare Part Names by SparePartCategoryID
-router.get("/parts/by-category-prefferd/:categoryid", (req, res) => {
-  const { categoryid } = req.params;
-  new sqlConnection.sql.Request().query(
-    `SELECT  SparePartName 
-     FROM Config_Mould_SparePart
-     WHERE SparePartCategoryID = ${categoryid} AND PreferredSparePart = 1`,
-    (err, result) => {
-      if (err) {
-        middlewares.standardResponse(res, null, 300, "Query Error: " + err);
-      } else {
-        middlewares.standardResponse(res, result.recordset, 200, "Success");
-      }
-    }
-  );
-});
 
 // 3️⃣ Get Spare Part Details by SparePartName
 router.get("/details/by-name/:sparename", (req, res) => {
   const { sparename } = req.params;
   new sqlConnection.sql.Request().query(
-    `SELECT *
-     FROM Config_Mould_SparePart
+    `SELECT  s.SparePartName,s.SparePartSize,s.MinQuantity,s.MaxQuantity,s.ReorderLevel,s.SparePartMake,s.LastUpdatedTime,ms.CurrentQuantity
+     FROM Config_Mould_SparePart s
+	 join Mould_SparePartMonitoring ms ON  ms.SparePartID = s.SparePartID
      WHERE SparePartName = '${sparename}'`,
     (err, result) => {
       if (err) {
@@ -76,68 +72,87 @@ router.get("/details/by-name/:sparename", (req, res) => {
   );
 });
 
-// 4️⃣ Get Mould Group Name by MouldID
-router.get("/mouldgroup/:mouldid", (req, res) => {
-  const { mouldid } = req.params;
+// 3️⃣ Get Spare Part Details by SparePartName
+router.get("/location/by-name/:sparename", (req, res) => {
+  const { sparename } = req.params;
   new sqlConnection.sql.Request().query(
-    `SELECT mg.MouldGroupName
-     FROM Config_MouldGroup mg
-     JOIN Config_Mould m ON m.MouldGroupID = mg.MouldGroupID
-     WHERE m.MouldID = ${mouldid}`,
+    `SELECT  s.SparePartName,sl.SparePartID,sl.LocationID,sl.Timestamp,sl.Quantity
+     FROM Config_Mould_SparePart s
+	 join Config_SparePartLocation sl ON  sl.SparePartID = s.SparePartID
+     WHERE SparePartName = '${sparename}'`,
     (err, result) => {
       if (err) {
         middlewares.standardResponse(res, null, 300, "Query Error: " + err);
       } else {
-        middlewares.standardResponse(res, result.recordset[0], 200, "Success");
+        middlewares.standardResponse(res, result.recordset, 200, "Success");
       }
     }
   );
 });
 
-router.post("/movement", (request, response) => {
-  new sqlConnection.sql.Request().query(
-    `UPDATE Mould_SparePartMonitoring SET CurrentQuantity = CurrentQuantity -  ${request.body.Quantity}, LastUpdatedTime = GETDATE() WHERE SparePartID  = ${request.body.SparePartID}
-    Insert Into Mould_SparePartGenealogy ([MouldID],[SparePartID],[CurrentQuantity],[Remark],[Timestamp]) Values (\'${request.body.MouldID}\',${request.body.SparePartID},(SELECT TOP(1) CurrentQuantity FROM Mould_SparePartMonitoring WHERE SparePartID  = ${request.body.SparePartID}),'',GETDATE())
-    `,
-    (err, result) => {
-      if (err) {
-        middlewares.standardResponse(
-          response,
-          null,
-          300,
-          "Error executing query: " + err
-        );
-        console.error("Error executing query:", err);
-      } else {
-        middlewares.standardResponse(
-          response,
-          result.recordset,
-          200,
-          "success"
-        );
-        console.dir(result.recordset);
-      }
-    }
-  );
-});
+router.post("/movement", async (req, res) => {
+  const { MouldID, SparePartID, locations } = req.body;
 
-// 5️⃣ Get Current Quantity and Location by SparePartID
-router.get("/monitoring/:sparePartId", (req, res) => {
-  const { sparePartId } = req.params;
-  new sqlConnection.sql.Request().query(
-    `SELECT CurrentQuantity, SparePartLoc 
-     FROM Mould_SparePartMonitoring 
-     WHERE SparePartID = ${sparePartId}`,
-    (err, result) => {
-      if (err) {
-        middlewares.standardResponse(res, null, 300, "Query Error: " + err);
-      } else {
-        middlewares.standardResponse(res, result.recordset[0], 200, "Success");
-      }
-    }
-  );
-});
+  try {
+    const totalConsumed = locations.reduce(
+      (sum, item) => sum + Number(item.Quantity),
+      0
+    );
 
+    let request = new sqlConnection.sql.Request();
+
+    // Build dynamic SQL for multiple location updates
+    let locationUpdates = "";
+    locations.forEach((item) => {
+      locationUpdates += `
+        UPDATE Config_SparePartLocation
+        SET Quantity = Quantity - ${item.Quantity}
+        WHERE SparePartID = ${SparePartID}
+          AND LocationID = '${item.LocationID}';
+      `;
+    });
+
+    const finalQuery = `
+      BEGIN TRAN;
+
+      -- Main spare part monitoring update
+      UPDATE Mould_SparePartMonitoring 
+      SET CurrentQuantity = CurrentQuantity - ${totalConsumed}, 
+          LastUpdatedTime = GETDATE()
+      WHERE SparePartID = ${SparePartID};
+
+      -- Genealogy entry
+      INSERT INTO Mould_SparePartGenealogy 
+        (MouldID, SparePartID, ConsumedQuantity, Remark, Timestamp)
+      VALUES 
+        ('${MouldID}', ${SparePartID}, ${totalConsumed}, '', GETDATE());
+
+      -- Multiple locations update
+      ${locationUpdates}
+
+      COMMIT TRAN;
+    `;
+
+    await request.query(finalQuery);
+
+    return middlewares.standardResponse(res, null, 200, "success");
+
+  } catch (err) {
+    console.error("Movement Error:", err);
+
+    // ROLLBACK safely
+    try {
+      await new sqlConnection.sql.Request().query("ROLLBACK TRAN;");
+    } catch {}
+
+    return middlewares.standardResponse(
+      res,
+      null,
+      300,
+      "Error executing query: " + err
+    );
+  }
+});
 
 
 module.exports = router;
