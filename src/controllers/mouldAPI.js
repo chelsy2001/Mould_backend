@@ -64,7 +64,7 @@ router.post("/update", (request, response) => {
   new sqlConnection.sql.Request().query(
     `UPDATE Mould_Monitoring SET MouldStatus = ${request.body.MouldStatus}, MouldLifeStatus =\'${request.body.MouldLifeStatus}\',
     LastUpdatedTime = GETDATE()
-    WHERE EquipmentID =  \'${request.body.EquipmentID}\' AND MouldID = \'${request.body.MouldID}\';
+    WHERE MouldID = \'${request.body.MouldID}\';
  
     INSERT INTO Mould_Genealogy VALUES (\'${request.body.MouldID}\',${request.body.CurrentMouldLife},${request.body.ParameterID},${request.body.ParameterValue},GETDATE());
 
@@ -331,7 +331,7 @@ router.post("/updateValidationStatusLoad", async (req, res) => {
       .query(`
         SELECT TOP 1 MouldActualLife
         FROM Mould_Monitoring
-        WHERE MouldID = @MouldID AND EquipmentID = @EquipmentID
+        WHERE MouldID = @MouldID  
         ORDER BY UID DESC
       `);
 
@@ -657,7 +657,7 @@ router.post("/updateValidationStatUnload", async (req, res) => {
       .query(`
         SELECT TOP 1 MouldActualLife
         FROM Mould_Monitoring
-        WHERE MouldID = @MouldID AND EquipmentID = @EquipmentID
+        WHERE MouldID = @MouldID
         ORDER BY UID DESC
       `);
 
@@ -1321,19 +1321,22 @@ router.post("/load", async (req, res) => {
     if (exists) {
       // 🔹 Update existing record
       await dbReq.query(`
-        UPDATE M
+       UPDATE MM
 SET 
-    M.MouldStatus = @MouldStatus,
-    M.MouldLifeStatus = @MouldLifeStatus,
-    M.MouldInstanceLife = D.Total_Shots,
-    M.MouldCurrentLife = D.Total_Shots,
-    M.LastUpdatedTime = GETDATE()
-FROM [PPMS_LILBawal].[dbo].[Mould_Monitoring] M
-LEFT JOIN [PPMS_LILBawal].[dbo].[Machine_Data] D
-    ON M.EquipmentID COLLATE SQL_Latin1_General_CP1_CI_AS = D.Machine_ID COLLATE SQL_Latin1_General_CP1_CI_AS
-    OR M.MouldID COLLATE SQL_Latin1_General_CP1_CI_AS = D.Mould_ID COLLATE SQL_Latin1_General_CP1_CI_AS
-WHERE M.EquipmentID = @EquipmentID 
-  AND M.MouldID = @MouldID;
+    MM.MouldActualLife   = MD.Total_Shots,
+    MM.MouldInstanceLife = MD.Total_Shots,
+    MM.MouldCurrentLife  = MD.Total_Shots,
+    MM.LastUpdatedTime   = GETDATE()
+FROM [PPMS_LILBawal].[dbo].[Mould_Monitoring] MM
+INNER JOIN [PPMS_LILBawal].[dbo].[Mould_MachineMatrix] MMM
+    ON MM.MouldID COLLATE SQL_Latin1_General_CP1_CI_AS
+       = MMM.MouldID COLLATE SQL_Latin1_General_CP1_CI_AS
+INNER JOIN [PPMS_LILBawal].[dbo].[Machine_Data] MD
+    ON MMM.EquipmentID COLLATE SQL_Latin1_General_CP1_CI_AS
+       = MD.Machine_ID COLLATE SQL_Latin1_General_CP1_CI_AS
+WHERE 
+    MMM.ValidationStatus = 1
+    AND MM.MouldID = @MouldID;
 
   INSERT INTO [PPMS_LILBawal].[dbo].[Mould_Genealogy]
         VALUES (@MouldID, @CurrentMouldLife, @ParameterID, @ParameterValue, GETDATE());

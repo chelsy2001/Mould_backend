@@ -283,4 +283,54 @@ router.post('/UpdateCheckPoint', async (req, res) => {
     middlewares.standardResponse(res, null, 500, "Database error: " + err.message);
   }
 });
+
+
+router.get("/get-checkpoint-images/:mouldId/:instance", async (req, res) => {
+  try {
+
+    const { mouldId, instance } = req.params;
+
+    const pool = await sqlConnection.sql.connect();
+
+    const result = await pool.request()
+      .input("MouldID", sql.NVarChar, mouldId)
+      .input("Instance", sql.Int, instance)
+      .query(`
+        SELECT 
+          UID,
+          Checkpoints,
+          Image,
+          MouldID,
+          Instance
+        FROM Mould_Checklist_Images
+        WHERE MouldID = @MouldID
+        AND Instance = @Instance
+        AND Imagetype = 'PM'
+      `);
+
+    if (result.recordset.length === 0) {
+      return res.json({
+        status: 404,
+        message: "No images found"
+      });
+    }
+
+    const images = result.recordset.map(row => ({
+      checkpoint: row.Checkpoints,
+      image: row.Image.toString("base64")
+    }));
+
+    res.json({
+      status: 200,
+      data: images
+    });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      status: 500,
+      message: "Server error"
+    });
+  }
+});
 module.exports = router;
