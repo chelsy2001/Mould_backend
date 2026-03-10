@@ -14,9 +14,10 @@ router.get("/categories/:mouldid", (req, res) => {
   request.input("mouldid", sqlConnection.sql.VarChar, mouldid);
 
   request.query(
-    `SELECT DISTINCT spc.SparePartCategory
-     FROM Config_SparePartCategory spc
-     WHERE spc.MouldID = @mouldid`,
+    `SELECT DISTINCT SparePartCategory
+     FROM Config_SparePartCategory
+     WHERE MouldID = @mouldid
+        OR SparePartCategory = 'Consumable'`,
     (err, result) => {
       if (err) {
         middlewares.standardResponse(res, null, 300, "Query Error: " + err);
@@ -28,29 +29,33 @@ router.get("/categories/:mouldid", (req, res) => {
 });
 
 
-// 2️⃣ Get Spare Part Names by SparePartCategoryID
 router.get("/parts/by-category/:mouldid/:category", (req, res) => {
   const { mouldid, category } = req.params;
 
   const request = new sqlConnection.sql.Request();
-  request.input("mouldid", sqlConnection.sql.VarChar, mouldid);
+  request.input("mouldid", sqlConnection.sql.Int, mouldid);
   request.input("category", sqlConnection.sql.VarChar, category);
 
-  request.query(
-    `SELECT ms.SparePartID, ms.SparePartName
-     FROM Config_Mould_SparePart AS ms
-     JOIN Config_SparePartCategory AS spc 
-       ON ms.SparePartID = spc.SparePartID
-     WHERE spc.MouldID = @mouldid
-       AND spc.SparePartCategory = @category`,
-    (err, result) => {
-      if (err) {
-        middlewares.standardResponse(res, null, 300, "Query Error: " + err);
-      } else {
-        middlewares.standardResponse(res, result.recordset, 200, "Success");
-      }
+  const query = `
+    SELECT ms.SparePartID, ms.SparePartName
+    FROM Config_Mould_SparePart ms
+    LEFT JOIN Config_SparePartCategory spc
+        ON ms.SparePartID = spc.SparePartID
+    WHERE 
+        (@category = 'Consumable' AND spc.SparePartCategory = 'Consumable')
+        OR
+        (@category <> 'Consumable' 
+            AND spc.MouldID = @mouldid 
+            AND spc.SparePartCategory = @category)
+  `;
+
+  request.query(query, (err, result) => {
+    if (err) {
+      middlewares.standardResponse(res, null, 300, "Query Error: " + err);
+    } else {
+      middlewares.standardResponse(res, result.recordset, 200, "Success");
     }
-  );
+  });
 });
 
 
