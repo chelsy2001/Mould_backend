@@ -83,6 +83,7 @@ router.get("/Lines", (request, response) => {
 //get api to show all dowmtimes
 router.get("/Getdowntime/details/:EquipmentID", async (request, response) => {
   const { EquipmentID } = request.params;
+  const { page = 1 } = request.query;
 
   if (!EquipmentID) {
     return middlewares.standardResponse(response, null, 400, "EquipmentID is required");
@@ -91,11 +92,12 @@ router.get("/Getdowntime/details/:EquipmentID", async (request, response) => {
   try {
     const sqlRequest = new sqlConnection.sql.Request();
 
-    // ✅ FIX: Use VarChar instead of Int
     sqlRequest.input("EquipmentID", sqlConnection.sql.VarChar, EquipmentID);
+    sqlRequest.input("PageNumber", sqlConnection.sql.Int, parseInt(page));
 
     const query = `
       DECLARE @StationID INT;
+      DECLARE @PageSize INT = 3000;
 
       SELECT @StationID = StationID
       FROM PPMS_LILBawal.dbo.Config_Equipment
@@ -121,20 +123,21 @@ router.get("/Getdowntime/details/:EquipmentID", async (request, response) => {
       LEFT JOIN Config_LossCategory l ON d.LossID = l.LossID
       LEFT JOIN Config_SubLossCategory sl ON d.SubLossID = sl.SubLossID
       LEFT JOIN Config_4M_LossCategory l4 ON d.[4MLossID] = l4.[4MLossID]
-      WHERE d.StationID = @StationID;
+
+      WHERE d.StationID = @StationID
+
+      ORDER BY d.DowntimeID DESC
+      OFFSET (@PageNumber - 1) * @PageSize ROWS
+      FETCH NEXT @PageSize ROWS ONLY;
     `;
 
     const result = await sqlRequest.query(query);
 
-    // ✅ handle empty result gracefully
-    if (!result.recordset || result.recordset.length === 0) {
-      return middlewares.standardResponse(response, [], 200, "No records found for given EquipmentID");
-    }
-
     return middlewares.standardResponse(response, result.recordset, 200, "Success");
+
   } catch (err) {
     console.error("Query Error:", err);
-    return middlewares.standardResponse(response, null, 500, "Error executing query: " + err.message);
+    return middlewares.standardResponse(response, null, 500, "Error: " + err.message);
   }
 });
 
@@ -160,7 +163,7 @@ WHERE EquipmentID = @EquipmentID;
 
 -- Get only UNASSIGNED Downtime Details with Shift Validation
 
-SELECT 
+SELECT Top 1000
     d.DowntimeID,
     d.StationID,
     d.ProdDate,
