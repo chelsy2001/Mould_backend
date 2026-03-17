@@ -112,6 +112,7 @@ router.get("/Getdowntime/details/:EquipmentID", async (request, response) => {
           d.EndTime,
           d.SystemDownTime,
           d.PLCDownTime,
+          d.TotalDownTime as Duration,
           d.LossID,
           d.Reason,
           l.LossName,
@@ -163,7 +164,7 @@ WHERE EquipmentID = @EquipmentID;
 
 -- Get only UNASSIGNED Downtime Details with Shift Validation
 
-SELECT Top 1000
+SELECT 
     d.DowntimeID,
     d.StationID,
     d.ProdDate,
@@ -172,6 +173,7 @@ SELECT Top 1000
     d.EndTime,
     d.SystemDownTime,
     d.PLCDownTime,
+    d.TotalDownTime as Duration,
     d.LossID,
     d.Reason,
     l.LossName,
@@ -194,7 +196,6 @@ LEFT JOIN Config_4M_LossCategory l4
 INNER JOIN PPMS_LILBawal.dbo.Prod_ShiftInformation psi
     ON d.ProdDate = psi.ProdDate
     AND d.ProdShift = psi.ShiftName
-    AND d.StationID = psi.StationID
 
 WHERE 
     d.StationID = @StationID

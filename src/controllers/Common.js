@@ -67,11 +67,22 @@ router.get("/Zone", (request, response) => {
 });
 
 // Get all Stations 
+// Get all Stations with Equipment
 router.get("/Station", (request, response) => {
   const ZoneID = request.query.ZoneID;
 
   new sqlConnection.sql.Request().query(
-    `SELECT StationID, StationName FROM Config_Station WHERE ZoneID = ${ZoneID}`,
+    `
+    SELECT 
+        S.StationID, 
+        S.StationName,
+        E.EquipmentID,
+        E.EquipmentName
+    FROM Config_Station S
+    LEFT JOIN Config_Equipment E 
+        ON S.StationID = E.StationID
+    WHERE S.ZoneID = ${ZoneID}
+    `,
     (err, result) => {
       if (err) {
         middlewares.standardResponse(response, null, 300, "Error executing query: " + err);
