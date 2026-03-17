@@ -51,6 +51,7 @@ router.get('/ReworkGenelogy/:EquipmentID', (request, response) => {
 
 
 
+
   //get Rework reasons 
   router.get("/ReworkReason", (request, response) => {
       new sqlConnection.sql.Request().query(
@@ -69,56 +70,83 @@ router.get('/ReworkGenelogy/:EquipmentID', (request, response) => {
 
   
 //--------get the qty's---
- router.get("/CycleSummary", async (request, response) => {
+router.get("/CycleSummary", async (request, response) => {
+
   const { ProdDate, ProdShift, EquipmentID } = request.query;
 
+  // Validate required parameters
   if (!ProdDate || !ProdShift || !EquipmentID) {
-    return middlewares.standardResponse(response, null, 400, "Missing required parameters: ProdDate, ProdShift, EquipmentID");
+    return middlewares.standardResponse(
+      response,
+      null,
+      400,
+      "Missing required parameters: ProdDate, ProdShift, EquipmentID"
+    );
   }
 
   try {
-    // Connect to SQL if not already connected
+
+    // Connect SQL
     await sqlConnection.sql.connect(config);
 
-    // Step 1: Get StationID from Config_Station based on EquipmentID (assumed in Token)
+    // Step 1: Get StationID from EquipmentID
     const stationResult = await new sqlConnection.sql.Request()
-      .input('EquipmentID', sqlConnection.sql.VarChar, EquipmentID)
+      .input("EquipmentID", sqlConnection.sql.VarChar, EquipmentID)
       .query(`
-        SELECT StationID 
+        SELECT TOP 1 StationID
         FROM [PPMS_LILBawal].[dbo].[Config_Equipment]
         WHERE EquipmentID = @EquipmentID
       `);
 
     if (stationResult.recordset.length === 0) {
-      return middlewares.standardResponse(response, null, 404, "No StationID found for the given EquipmentID");
+      return middlewares.standardResponse(
+        response,
+        null,
+        404,
+        "No StationID found for the given EquipmentID"
+      );
     }
 
     const stationID = stationResult.recordset[0].StationID;
 
-    // Step 2: Fetch latest production data for the StationID
+    // Step 2: Get latest production summary
     const productionResult = await new sqlConnection.sql.Request()
-      .input('ProdDate', sqlConnection.sql.Date, ProdDate)
-      .input('ProdShift', sqlConnection.sql.VarChar, ProdShift)
-     .input('StationID', sqlConnection.sql.Int, stationID)
+      .input("ProdDate", sqlConnection.sql.Date, ProdDate)
+      .input("ProdShift", sqlConnection.sql.VarChar, ProdShift)
+      .input("StationID", sqlConnection.sql.Int, stationID)
       .query(`
-        SELECT TOP 1 
-          TotalCount, 
-          GoodPart, 
+        SELECT TOP 1
+          TotalCount,
+          GoodPart,
           RejectedCount
         FROM [PPMS_LILBawal].[dbo].[Perf_CycleTime]
-        WHERE ProdDate = @ProdDate 
-          AND ProdShift = @ProdShift 
+        WHERE ProdDate = @ProdDate
+          AND ProdShift = @ProdShift
           AND StationID = @StationID
         ORDER BY [Timestamp] DESC
       `);
 
-    middlewares.standardResponse(response, productionResult.recordset, 200, "Success");
+    return middlewares.standardResponse(
+      response,
+      productionResult.recordset,
+      200,
+      "Success"
+    );
 
   } catch (err) {
-    middlewares.standardResponse(response, null, 500, "Error executing query: " + err.message);
-  }
-});
 
+    console.error("CycleSummary Error:", err);
+
+    return middlewares.standardResponse(
+      response,
+      null,
+      500,
+      "Error executing query: " + err.message
+    );
+
+  }
+
+});
 //Update API
 // // POST /rework/update-rework
 // router.post('/update-rework-cycle-summary', async (req, res) => {
