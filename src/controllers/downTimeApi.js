@@ -35,26 +35,34 @@ router.get("/loss4M", (request, response) => {
 
   //Get all SubLoss
   router.get("/Subloss/LossName", (request, response) => {
-    const { LossName } = request.query; 
-    if (!LossName) {
-        return middlewares.standardResponse(response, null, 400, "LossName is required");
-    }
+  const { LossName } = request.query;
 
-    const sqlRequest = new sqlConnection.sql.Request();
-    sqlRequest.input("LossName", sqlConnection.sql.VarChar, LossName);
-    sqlRequest.query(
-      `select s.SubLossID , s.SubLossName , l.LossName , l.LossID from [Config_SubLossCategory] s
-      JOIN Config_LossCategory l ON s.LossID = l.LossID
-      `,
-      (err, result) => {
-        if (err) {
-          middlewares.standardResponse(response, null, 300, "Error executing query: " + err);
-        } else {
-          middlewares.standardResponse(response, result.recordset, 200, "success");
-        }
+  if (!LossName) {
+    return middlewares.standardResponse(response, null, 400, "LossName is required");
+  }
+
+  const sqlRequest = new sqlConnection.sql.Request();
+  sqlRequest.input("LossName", sqlConnection.sql.VarChar, LossName);
+
+  sqlRequest.query(
+    `SELECT 
+        s.SubLossID, 
+        s.SubLossName, 
+        l.LossName, 
+        l.LossID 
+     FROM Config_SubLossCategory s
+     JOIN Config_LossCategory l 
+       ON s.LossID = l.LossID
+     WHERE l.LossName = @LossName`,   // ✅ filter added
+    (err, result) => {
+      if (err) {
+        middlewares.standardResponse(response, null, 300, "Error executing query: " + err);
+      } else {
+        middlewares.standardResponse(response, result.recordset, 200, "success");
       }
-    );
-  });
+    }
+  );
+});
 
 // Get all lines
 router.get("/Lines", (request, response) => {
@@ -144,37 +152,54 @@ router.get("/Getdowntime/unassigned/:EquipmentID", async (request, response) => 
 
         const query = `
             -- Get the StationID for the given EquipmentID
-            DECLARE @StationID INT;
+           DECLARE @StationID INT;
 
-            SELECT @StationID = StationID
-            FROM PPMS_LILBawal.dbo.Config_Equipment
-            WHERE EquipmentID = @EquipmentID;
+SELECT @StationID = StationID
+FROM PPMS_LILBawal.dbo.Config_Equipment
+WHERE EquipmentID = @EquipmentID;
 
-            -- If StationID found, get only UNASSIGNED Downtime Details
-            SELECT 
-                d.DowntimeID,
-                d.StationID,
-                d.ProdDate,
-                d.ProdShift,
-                d.StartTime,
-                d.EndTime,
-                d.SystemDownTime,
-                d.PLCDownTime,
-                d.LossID,
-                d.Reason,
-                l.LossName,
-                d.SubLossID,
-                d.[4MLossID],
-                l4.[4MLossName],
-                sl.SubLossName
-            FROM PPMS_LILBawal.dbo.Perf_Downtime d
-            LEFT JOIN Config_LossCategory l ON d.LossID = l.LossID
-            LEFT JOIN Config_SubLossCategory sl ON d.SubLossID = sl.SubLossID
-             LEFT JOIN Config_4M_LossCategory l4 ON d.[4MLossID] = l4.[4MLossID]
-            WHERE 
-                d.StationID = @StationID
-                AND (d.LossID IS NULL OR d.LossID = 0 OR d.SubLossID IS NULL OR d.SubLossID = 0)
-                or (d.[4MLossID] IS NULL OR d.[4MLossID] = 5 );
+-- Get only UNASSIGNED Downtime Details with Shift Validation
+
+SELECT 
+    d.DowntimeID,
+    d.StationID,
+    d.ProdDate,
+    d.ProdShift,
+    d.StartTime,
+    d.EndTime,
+    d.SystemDownTime,
+    d.PLCDownTime,
+    d.LossID,
+    d.Reason,
+    l.LossName,
+    d.SubLossID,
+    d.[4MLossID],
+    l4.[4MLossName],
+    sl.SubLossName
+FROM PPMS_LILBawal.dbo.Perf_Downtime d
+
+LEFT JOIN Config_LossCategory l 
+    ON d.LossID = l.LossID
+
+LEFT JOIN Config_SubLossCategory sl 
+    ON d.SubLossID = sl.SubLossID
+
+LEFT JOIN Config_4M_LossCategory l4 
+    ON d.[4MLossID] = l4.[4MLossID]
+
+-- Validate Shift & Date
+INNER JOIN PPMS_LILBawal.dbo.Prod_ShiftInformation psi
+    ON d.ProdDate = psi.ProdDate
+    AND d.ProdShift = psi.ShiftName
+    AND d.StationID = psi.StationID
+
+WHERE 
+    d.StationID = @StationID
+    AND (
+        d.LossID IS NULL OR d.LossID = 0 
+        OR d.SubLossID IS NULL OR d.SubLossID = 0
+        OR d.[4MLossID] IS NULL OR d.[4MLossID] = 5
+    );
         `;
 
         const result = await sqlRequest.query(query);
@@ -189,21 +214,20 @@ router.get("/Getdowntime/unassigned/:EquipmentID", async (request, response) => 
 
 
 // Update downtime details: Reason, LossName, SubLossName
-// ✅ Update downtime details: Reason, LossName, SubLossName, 4MLossName
-// ✅ Update downtime details: Reason, LossName, SubLossName, 4MLossName
+
 router.put("/downtime/update", async (request, response) => {
   try {
     console.log("Received body:", request.body); // Debug log
 
-    const { DowntimeID, LossName, SubLossName, LossName4M, Reason } = request.body;
+    const { DowntimeID, LossName, SubLossName, Reason } = request.body;
 
     // ✅ Validate request body
-    if (!DowntimeID || !LossName || !SubLossName || !LossName4M || !Reason) {
+    if (!DowntimeID || !LossName || !SubLossName || !Reason) {
       return middlewares.standardResponse(
         response,
         null,
         400,
-        "DowntimeID, LossName, SubLossName, LossName4M, and Reason are required"
+        "DowntimeID, LossName, SubLossName, and Reason are required"
       );
     }
 
@@ -231,23 +255,11 @@ router.put("/downtime/update", async (request, response) => {
     }
     const SubLossID = subLossQuery.recordset[0].SubLossID;
 
-    // 3️⃣ Get 4MLossID dynamically
-    const loss4MRequest = new sqlConnection.sql.Request();
-    loss4MRequest.input("LossName4M", sqlConnection.sql.VarChar, LossName4M.trim());
-    const loss4MQuery = await loss4MRequest.query(`
-      SELECT [4MLossID] FROM Config_4M_LossCategory WHERE [4MLossName] = @LossName4M
-    `);
-    if (loss4MQuery.recordset.length === 0) {
-      return middlewares.standardResponse(response, null, 404, "4MLossName not found in Config_4M_LossCategory");
-    }
-    const LossID4M = loss4MQuery.recordset[0]["4MLossID"];
-
     // 4️⃣ Update Perf_Downtime table
     const updateRequest = new sqlConnection.sql.Request();
     updateRequest.input("DowntimeID", sqlConnection.sql.Int, DowntimeID);
     updateRequest.input("LossID", sqlConnection.sql.Int, LossID);
     updateRequest.input("SubLossID", sqlConnection.sql.Int, SubLossID);
-    updateRequest.input("LossID4M", sqlConnection.sql.Int, LossID4M);
     updateRequest.input("Reason", sqlConnection.sql.VarChar, Reason.trim());
 
     const updateQuery = `
@@ -255,7 +267,6 @@ router.put("/downtime/update", async (request, response) => {
       SET 
         LossID = @LossID, 
         SubLossID = @SubLossID, 
-        [4MLossID] = @LossID4M,
         Reason = @Reason
       WHERE DowntimeID = @DowntimeID;
     `;

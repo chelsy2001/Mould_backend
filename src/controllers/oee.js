@@ -42,18 +42,19 @@ router.get("/getEquipmentID/:EquipmentName", (request, response) => {
 
 // fetch the oee details
 router.get("/OEEDetails/:EquipmentID", async (req, res) => {
-  const EquipmentID = parseInt(req.params.EquipmentID);
+
+  const EquipmentID = req.params.EquipmentID;
 
   if (!EquipmentID) {
-    return res.status(400).json({ error: "Missing or invalid EquipmentID parameter" });
+    return res.status(400).json({ error: "Missing EquipmentID parameter" });
   }
 
   try {
     await sql.connect(config);
     const request = new sql.Request();
 
-    // Step 1: Fetch StationID (or LineID) based on EquipmentID
-    request.input("EquipmentID", sql.Int, EquipmentID);
+    request.input("EquipmentID", sql.VarChar, EquipmentID);
+
     const stationResult = await request.query(`
       SELECT TOP 1 StationID, LineID
       FROM [PPMS_LILBawal].[dbo].[Config_Station]
@@ -70,9 +71,8 @@ router.get("/OEEDetails/:EquipmentID", async (req, res) => {
 
     const { StationID } = stationResult.recordset[0];
 
-    // Step 2: Call the OEE stored procedure with LineID
     const oeeRequest = new sql.Request();
-    oeeRequest.input("StationID", sql.Int, StationID); // Assuming the SP expects LineID
+    oeeRequest.input("StationID", sql.Int, StationID);
 
     const oeeResult = await oeeRequest.execute("[PPMS_LILBawal].[dbo].[Dashboard_Perf_OEE_StationWise]");
 
@@ -81,8 +81,10 @@ router.get("/OEEDetails/:EquipmentID", async (req, res) => {
       message: "success",
       data: oeeResult.recordset
     });
+
   } catch (err) {
     console.error("Error executing stored procedure:", err);
+
     res.status(500).json({
       status: 500,
       message: "Internal server error",
@@ -95,18 +97,20 @@ router.get("/OEEDetails/:EquipmentID", async (req, res) => {
   //Fetch the unassigned downtime count
 
 router.get('/unassigned-downtime-count/:EquipmentID', async (req, res) => {
-  const equipmentId = parseInt(req.params.EquipmentID);
 
-  if (isNaN(equipmentId)) {
-    return res.status(400).json({ error: 'Invalid or missing EquipmentID parameter' });
+  const equipmentId = req.params.EquipmentID;
+
+  if (!equipmentId) {
+    return res.status(400).json({ error: 'Missing EquipmentID parameter' });
   }
 
   try {
+
     await sql.connect(config);
 
     // Step 1: Get StationID from EquipmentID
     const stationResult = await new sql.Request()
-      .input('EquipmentID', sql.Int, equipmentId)
+      .input('EquipmentID', sql.VarChar, equipmentId)
       .query(`
         SELECT TOP 1 StationID
         FROM Config_Equipment
@@ -119,25 +123,37 @@ router.get('/unassigned-downtime-count/:EquipmentID', async (req, res) => {
 
     const stationId = stationResult.recordset[0].StationID;
 
-    // Step 2: Fetch unassigned downtime count using StationID
+    // Step 2: Fetch unassigned downtime count
     const result = await new sql.Request()
       .input('StationID', sql.Int, stationId)
       .query(`
         SELECT COUNT(*) AS UnassignedDowntimeCount
         FROM Perf_Downtime PD
-        JOIN Config_LossCategory CL ON PD.LossID = CL.LossID
-        WHERE CL.LossName = 'Unassigned'
+        LEFT JOIN Config_LossCategory CL 
+          ON PD.LossID = CL.LossID
+        WHERE 
+          CL.LossName = 'Unassigned'
           AND (PD.Reason IS NULL OR PD.Reason = '')
           AND PD.StationID = @StationID
       `);
 
-    res.status(200).json({ count: result.recordset[0].UnassignedDowntimeCount });
+    res.status(200).json({
+      status: 200,
+      count: result.recordset[0].UnassignedDowntimeCount
+    });
+
   } catch (error) {
+
     console.error('Database error:', error);
-    res.status(500).json({ error: 'Internal server error', details: error.message });
+
+    res.status(500).json({
+      status: 500,
+      error: 'Internal server error',
+      details: error.message
+    });
+
   }
 });
-
 //---------call log
 router.post('/logCall', async (req, res) => {
   const { EquipmentName, DepartmentName } = req.body;

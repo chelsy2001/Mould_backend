@@ -63,7 +63,7 @@ app.use("/api/rework",reworkRoute)
 app.use("/api/OEE",OEE);
 app.use("/api/Common",Common);
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 4000;
 
 // Start the server on port 3000
 app.listen(PORT, () => {
