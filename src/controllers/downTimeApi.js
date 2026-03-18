@@ -164,7 +164,7 @@ WHERE EquipmentID = @EquipmentID;
 
 -- Get only UNASSIGNED Downtime Details with Shift Validation
 
-SELECT 
+SELECT Top 1000
     d.DowntimeID,
     d.StationID,
     d.ProdDate,

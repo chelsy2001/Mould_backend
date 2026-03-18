@@ -7,45 +7,61 @@ const router = express.Router();
 
 
 
-// GET Rework data by EquipmentID from Rework_Genealogy table
 router.get('/ReworkGenelogy/:EquipmentID', (request, response) => {
-  const EquipmentID = parseInt(request.params.EquipmentID);
+  const EquipmentID = request.params.EquipmentID;
 
-  if (isNaN(EquipmentID)) {
-    return middlewares.standardResponse(response, null, 400, 'Invalid EquipmentID');
+  console.log("Received EquipmentID:", EquipmentID);
+
+  if (!EquipmentID) {
+    return middlewares.standardResponse(
+      response,
+      null,
+      400,
+      `Invalid EquipmentID: ${EquipmentID}`
+    );
   }
 
   const query = `
-   SELECT 
+    SELECT 
       RG.UID,
       RG.EquipmentID,
       CE.EquipmentName,
-      RG.UserID,
+      RG.UserID AS UserName,
       CU.UserName,
       RG.ProdDate,
       RG.ProdShift,
       RG.NOKQuantity,
       RG.Reason,
       RG.Remark,
-	  MM.MouldID,
-	  MM.MouldName
+      MM.MouldID,
+      MM.MouldName
     FROM [Rework_Genealogy] RG
     LEFT JOIN [Config_User] CU ON RG.UserID = CU.UserID
     LEFT JOIN [Config_Equipment] CE ON RG.EquipmentID = CE.EquipmentID
     LEFT JOIN [Mould_MachineMatrix] MM ON RG.EquipmentID = MM.EquipmentID 
-    WHERE RG.EquipmentID = @EquipmentID AND MM.validationStatus = 1
+    WHERE RG.EquipmentID = @EquipmentID
     ORDER BY RG.UID DESC
   `;
 
   const sqlRequest = new sqlConnection.sql.Request();
-  sqlRequest.input('EquipmentID', sqlConnection.sql.Int, EquipmentID);
+  sqlRequest.input('EquipmentID', sqlConnection.sql.VarChar, EquipmentID);
 
   sqlRequest.query(query, (err, result) => {
     if (err) {
-      middlewares.standardResponse(response, null, 500, 'Error executing query: ' + err);
-    } else {
-      middlewares.standardResponse(response, result.recordset, 200, 'Success');
+      return middlewares.standardResponse(
+        response,
+        null,
+        500,
+        'Error executing query: ' + err
+      );
     }
+
+    return middlewares.standardResponse(
+      response,
+      result.recordset,
+      200,
+      'Success'
+    );
   });
 });
 
@@ -218,37 +234,110 @@ router.get("/CycleSummary", async (request, response) => {
 // });
 
 // 📁 routes/mouldRoutes.js
+// router.get("/getValidatedMoulds/:EquipmentName", async (req, res) => {
+//   const { EquipmentName } = req.params;
+
+//   if (!EquipmentName) {
+//     return middlewares.standardResponse(res, null, 400, "Missing EquipmentName parameter");
+//   }
+
+//   try {
+//     const request = new sqlConnection.sql.Request();
+
+//     // ✅ SQL Query: fetch moulds for that EquipmentName where ValidationStatus = 1 or 4 and MLossID = 5
+//     const query = `
+//       SELECT 
+//           [UID],
+//           [EquipmentName],
+//           [EquipmentID],
+//           [MouldName],
+//           [MouldID]
+//       FROM [PPMS_LILBawal].[dbo].[Mould_MachineMatrix]
+//       WHERE EquipmentName = @EquipmentName
+//         AND ValidationStatus = 1
+//       ORDER BY MouldName;
+//     `;
+
+//     request.input("EquipmentName", sqlConnection.sql.NVarChar, EquipmentName);
+
+//     const result = await request.query(query);
+
+//     middlewares.standardResponse(res, result.recordset, 200, "Validated moulds fetched successfully");
+//   } catch (err) {
+//     console.error("❌ Error fetching validated moulds:", err);
+//     middlewares.standardResponse(res, null, 500, "Error executing query: " + err.message);
+//   }
+// });
+
 router.get("/getValidatedMoulds/:EquipmentName", async (req, res) => {
   const { EquipmentName } = req.params;
-
+ 
   if (!EquipmentName) {
     return middlewares.standardResponse(res, null, 400, "Missing EquipmentName parameter");
   }
-
+ 
   try {
     const request = new sqlConnection.sql.Request();
-
-    // ✅ SQL Query: fetch moulds for that EquipmentName where ValidationStatus = 1 or 4 and MLossID = 5
+ 
     const query = `
-      SELECT 
-          [UID],
-          [EquipmentName],
-          [EquipmentID],
-          [MouldName],
-          [MouldID]
-      FROM [PPMS_LILBawal].[dbo].[Mould_MachineMatrix]
-      WHERE EquipmentName = @EquipmentName
-        AND ValidationStatus = 1
-      ORDER BY MouldName;
+      DECLARE @CurrDate DATE;
+ 
+      --------------------------------------------------
+      -- Get current production date
+      --------------------------------------------------
+      SELECT TOP 1
+          @CurrDate = ProdDate
+      FROM Prod_ShiftInformation
+      ORDER BY LastUpdatedTime DESC;
+ 
+      --------------------------------------------------
+      -- Get latest validated mould
+      --------------------------------------------------
+      WITH LatestMould AS (
+          SELECT
+              MEL.*,
+              ROW_NUMBER() OVER (
+                  PARTITION BY MEL.EquipmentID
+                  ORDER BY MEL.Timestamp DESC
+              ) AS rn
+          FROM Mould_EquipmentLog MEL
+          WHERE MEL.ValidationStatus = 1
+            AND MEL.ProdDate = @CurrDate
+      )
+ 
+      SELECT
+          CE.EquipmentName,
+          CE.EquipmentID,
+          CM.MouldName,
+          CM.MouldID,
+          MEL.ProdDate,
+          MEL.ProdShift,
+          MEL.AtMouldLife,
+          MEL.Timestamp
+      FROM LatestMould MEL
+      JOIN Config_Equipment CE
+          ON MEL.EquipmentID = CE.EquipmentID
+      JOIN Config_Mould CM
+          ON MEL.MouldID = CM.MouldID
+      WHERE
+          MEL.rn = 1
+          AND LTRIM(RTRIM(CE.EquipmentName)) = LTRIM(RTRIM(@EquipmentName))
+      ORDER BY MEL.Timestamp DESC;
     `;
-
+ 
     request.input("EquipmentName", sqlConnection.sql.NVarChar, EquipmentName);
-
+ 
     const result = await request.query(query);
-
-    middlewares.standardResponse(res, result.recordset, 200, "Validated moulds fetched successfully");
+ 
+    middlewares.standardResponse(
+      res,
+      result.recordset,
+      200,
+      "Current validated mould fetched successfully"
+    );
+ 
   } catch (err) {
-    console.error("❌ Error fetching validated moulds:", err);
+    console.error("❌ Error fetching validated mould:", err);
     middlewares.standardResponse(res, null, 500, "Error executing query: " + err.message);
   }
 });
