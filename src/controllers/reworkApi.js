@@ -7,45 +7,61 @@ const router = express.Router();
 
 
 
-// GET Rework data by EquipmentID from Rework_Genealogy table
 router.get('/ReworkGenelogy/:EquipmentID', (request, response) => {
-  const EquipmentID = parseInt(request.params.EquipmentID);
+  const EquipmentID = request.params.EquipmentID;
 
-  if (isNaN(EquipmentID)) {
-    return middlewares.standardResponse(response, null, 400, 'Invalid EquipmentID');
+  console.log("Received EquipmentID:", EquipmentID);
+
+  if (!EquipmentID) {
+    return middlewares.standardResponse(
+      response,
+      null,
+      400,
+      `Invalid EquipmentID: ${EquipmentID}`
+    );
   }
 
   const query = `
-   SELECT 
+    SELECT 
       RG.UID,
       RG.EquipmentID,
       CE.EquipmentName,
-      RG.UserID,
+      RG.UserID AS UserName,
       CU.UserName,
       RG.ProdDate,
       RG.ProdShift,
       RG.NOKQuantity,
       RG.Reason,
       RG.Remark,
-	  MM.MouldID,
-	  MM.MouldName
+      MM.MouldID,
+      MM.MouldName
     FROM [Rework_Genealogy] RG
     LEFT JOIN [Config_User] CU ON RG.UserID = CU.UserID
     LEFT JOIN [Config_Equipment] CE ON RG.EquipmentID = CE.EquipmentID
     LEFT JOIN [Mould_MachineMatrix] MM ON RG.EquipmentID = MM.EquipmentID 
-    WHERE RG.EquipmentID = @EquipmentID AND MM.validationStatus = 1
+    WHERE RG.EquipmentID = @EquipmentID
     ORDER BY RG.UID DESC
   `;
 
   const sqlRequest = new sqlConnection.sql.Request();
-  sqlRequest.input('EquipmentID', sqlConnection.sql.Int, EquipmentID);
+  sqlRequest.input('EquipmentID', sqlConnection.sql.VarChar, EquipmentID);
 
   sqlRequest.query(query, (err, result) => {
     if (err) {
-      middlewares.standardResponse(response, null, 500, 'Error executing query: ' + err);
-    } else {
-      middlewares.standardResponse(response, result.recordset, 200, 'Success');
+      return middlewares.standardResponse(
+        response,
+        null,
+        500,
+        'Error executing query: ' + err
+      );
     }
+
+    return middlewares.standardResponse(
+      response,
+      result.recordset,
+      200,
+      'Success'
+    );
   });
 });
 
@@ -272,7 +288,7 @@ router.get("/getValidatedMoulds/:EquipmentName", async (req, res) => {
       "Missing EquipmentName or ProdDate parameter"
     );
   }
-
+ 
   try {
     const request = new sqlConnection.sql.Request();
 
