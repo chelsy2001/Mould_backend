@@ -60,26 +60,48 @@ WHERE
 //Update API to update the OKNOK and obeservation
 
 router.post('/ExecuteUpdateCheckPointStatus', async (req, res) => {
-  const { CheckPointID, Observation, OKNOK } = req.body;
+  const { CheckPointID, Observation, OKNOK, UpperLimit, LowerLimit } = req.body;
 
   if (!CheckPointID || OKNOK === undefined) {
     return middlewares.standardResponse(res, null, 400, "Missing required fields.");
   }
 
   try {
+    const sqlRequest = new sqlConnection.sql.Request();
+
+    // ✅ Convert values safely
+    const upper = UpperLimit === '' || UpperLimit === 0 || UpperLimit === undefined
+      ? null
+      : parseFloat(UpperLimit);
+
+    const lower = LowerLimit === '' || LowerLimit === 0 || LowerLimit === undefined
+      ? null
+      : parseFloat(LowerLimit);
+
+    // ❌ If still not valid number → reject
+    if ((upper !== null && isNaN(upper)) || (lower !== null && isNaN(lower))) {
+      return middlewares.standardResponse(res, null, 400, "UpperLimit/LowerLimit must be valid numbers.");
+    }
+
     const query = `
       UPDATE Mould_Execute_PMCheckPoint
-      SET 
+      SET
         Observation = @Observation,
         OKNOK = @OKNOK,
+        UpperLimit = @UpperLimit,
+        LowerLimit = @LowerLimit,
         LastUpdatedTime = GETDATE()
-      WHERE 
+      WHERE
         CheckPointID = @CheckPointID
     `;
 
-    const sqlRequest = new sqlConnection.sql.Request();
     sqlRequest.input('Observation', sql.NVarChar, Observation ?? '');
-    sqlRequest.input('OKNOK', sql.Int, OKNOK); // 1 for OK, 2 for NOK
+    sqlRequest.input('OKNOK', sql.Int, OKNOK);
+
+    // ✅ Allow NULL values
+    sqlRequest.input('UpperLimit', sql.Numeric(10, 2), upper);
+    sqlRequest.input('LowerLimit', sql.Numeric(10, 2), lower);
+
     sqlRequest.input('CheckPointID', sql.Int, CheckPointID);
 
     await sqlRequest.query(query);
