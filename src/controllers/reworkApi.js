@@ -278,48 +278,38 @@ router.get("/CycleSummary", async (request, response) => {
 
 router.get("/getValidatedMoulds/:EquipmentName", async (req, res) => {
   const { EquipmentName } = req.params;
-  const { ProdDate } = req.query; // ✅ get ProdDate from query
+  const { ProdDate, ProdShift } = req.query; // ✅ added ProdShift
 
-  if (!EquipmentName || !ProdDate) {
+  if (!EquipmentName || !ProdDate || !ProdShift) {
     return middlewares.standardResponse(
       res,
       null,
       400,
-      "Missing EquipmentName or ProdDate parameter"
+      "Missing EquipmentName, ProdDate or ProdShift parameter"
     );
   }
- 
+
   try {
     const request = new sqlConnection.sql.Request();
 
     const query = `
-      --------------------------------------------------
-      -- Get all validated moulds for given date
-      --------------------------------------------------
-      SELECT 
-          CE.EquipmentName,
-          CE.EquipmentID,
-          CM.MouldName,
-          CM.MouldID,
-          MEL.ProdDate,
-          MEL.ProdShift,
-          MEL.AtMouldLife,
-          MEL.Timestamp
-      FROM Mould_EquipmentLog MEL
-      JOIN Config_Equipment CE
-          ON MEL.EquipmentID = CE.EquipmentID
-      JOIN Config_Mould CM
-          ON MEL.MouldID = CM.MouldID
-      WHERE 
-          MEL.ValidationStatus = 1
-          AND MEL.ProdDate = @ProdDate
-          AND LTRIM(RTRIM(CE.EquipmentName)) = LTRIM(RTRIM(@EquipmentName))
-      ORDER BY MEL.Timestamp DESC;
+      SELECT DISTINCT m.MouldName
+      FROM Perf_CycleTime p
+      JOIN Config_Mould m 
+          ON p.MouldID = m.MouldID
+      WHERE p.StationID = (
+              SELECT StationID 
+              FROM Config_Equipment 
+              WHERE EquipmentName = @EquipmentName
+      )
+      AND CAST(p.ProdDate AS DATE) = @ProdDate
+      AND p.ProdShift = @ProdShift
     `;
 
     // ✅ Pass parameters
     request.input("EquipmentName", sqlConnection.sql.NVarChar, EquipmentName);
     request.input("ProdDate", sqlConnection.sql.Date, ProdDate);
+    request.input("ProdShift", sqlConnection.sql.NVarChar, ProdShift);
 
     const result = await request.query(query);
 
@@ -327,11 +317,11 @@ router.get("/getValidatedMoulds/:EquipmentName", async (req, res) => {
       res,
       result.recordset,
       200,
-      "All validated moulds fetched successfully"
+      "Moulds fetched successfully"
     );
 
   } catch (err) {
-    console.error("❌ Error fetching validated moulds:", err);
+    console.error("❌ Error fetching moulds:", err);
     middlewares.standardResponse(
       res,
       null,
