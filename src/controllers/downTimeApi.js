@@ -2,6 +2,7 @@ const express = require("express");
 const sqlConnection = require("../databases/ssmsConn.js");
 const sql = require("mssql");
 const middlewares = require("../middlewares/middlewares.js");
+const { route } = require("./reworkApi.js");
 
 const router = express.Router();
 
@@ -34,29 +35,55 @@ router.get("/loss4M", (request, response) => {
   });
 
   //Get all SubLoss
-  router.get("/Subloss/LossName", (request, response) => {
-  const { LossName } = request.query;
+//   router.get("/Subloss/LossName", (request, response) => {
+//   const { LossName } = request.query;
 
-  if (!LossName) {
-    return middlewares.standardResponse(response, null, 400, "LossName is required");
+//   if (!LossName) {
+//     return middlewares.standardResponse(response, null, 400, "LossName is required");
+//   }
+
+//   const sqlRequest = new sqlConnection.sql.Request();
+//   sqlRequest.input("LossName", sqlConnection.sql.VarChar, LossName);
+
+//   sqlRequest.query(
+//     `SELECT 
+//         s.SubLossID, 
+//         s.SubLossName, 
+//         l.LossName, 
+//         l.LossID 
+//      FROM Config_SubLossCategory s
+//      JOIN Config_LossCategory l 
+//        ON s.LossID = l.LossID
+//      WHERE l.LossName = @LossName`,   // ✅ filter added
+//     (err, result) => {
+//       if (err) {
+//         middlewares.standardResponse(response, null, 300, "Error executing query: " + err);
+//       } else {
+//         middlewares.standardResponse(response, result.recordset, 200, "success");
+//       }
+//     }
+//   );
+// });
+
+router.get("/Subloss", (request, response) => {
+  const { LossID } = request.query;
+
+  if (!LossID) {
+    return middlewares.standardResponse(response, null, 400, "LossID is required");
   }
 
   const sqlRequest = new sqlConnection.sql.Request();
-  sqlRequest.input("LossName", sqlConnection.sql.VarChar, LossName);
+  sqlRequest.input("LossID", sqlConnection.sql.Int, LossID);
 
   sqlRequest.query(
     `SELECT 
-        s.SubLossID, 
-        s.SubLossName, 
-        l.LossName, 
-        l.LossID 
-     FROM Config_SubLossCategory s
-     JOIN Config_LossCategory l 
-       ON s.LossID = l.LossID
-     WHERE l.LossName = @LossName`,   // ✅ filter added
+        SubLossID, 
+        SubLossName
+     FROM Config_SubLossCategory
+     WHERE LossID = @LossID`,
     (err, result) => {
       if (err) {
-        middlewares.standardResponse(response, null, 300, "Error executing query: " + err);
+        middlewares.standardResponse(response, null, 300, "Error: " + err);
       } else {
         middlewares.standardResponse(response, result.recordset, 200, "success");
       }
@@ -111,8 +138,8 @@ router.get("/Getdowntime/details/:EquipmentID", async (request, response) => {
           d.StartTime,
           d.EndTime,
           d.SystemDownTime,
-          d.PLCDownTime,
-          d.TotalDownTime as Duration,
+          d.PLCDownTime as Duration,
+          d.TotalDownTime ,
           d.LossID,
           d.Reason,
           l.LossName,
@@ -172,8 +199,8 @@ SELECT Top 1000
     d.StartTime,
     d.EndTime,
     d.SystemDownTime,
-    d.PLCDownTime,
-    d.TotalDownTime as Duration,
+    d.PLCDownTime as Duration,
+    d.TotalDownTime ,
     d.LossID,
     d.Reason,
     l.LossName,
@@ -203,7 +230,8 @@ WHERE
         d.LossID IS NULL OR d.LossID = 0 
         OR d.SubLossID IS NULL OR d.SubLossID = 0
         OR d.[4MLossID] IS NULL OR d.[4MLossID] = 5
-    );
+    )
+        order by d.LastUpdatedTime desc;
         `;
 
         const result = await sqlRequest.query(query);
@@ -340,5 +368,62 @@ router.put("/downtime/update", async (request, response) => {
 //   });
 // });
 
+router.post("/downtime/split", async (req, res) => {
+  try {
+    console.log("📥 Incoming Split Data:", req.body);
+
+    const {
+      DowntimeID,
+      Duration,
+      NewDuration,
+      LossName1,
+      SubLossName1,
+      TPMSubLossName1,
+      Reason1,
+      LossName2,
+      SubLossName2,
+      TPMSubLossName2,
+      Reason2
+    } = req.body;
+
+    if (!DowntimeID || !Duration || !NewDuration) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing required fields"
+      });
+    }
+
+    const request = new sqlConnection.sql.Request();
+
+    await request
+      .input("DowntimeID", sql.Int, DowntimeID)
+      .input("Duration", sql.Int, Duration)
+      .input("NewDuration", sql.Int, NewDuration)
+
+      .input("LossName1", sql.Int, LossName1 || 0)
+      .input("SubLossName1", sql.Int, SubLossName1 || 0)
+      .input("TPMSubLossName1", sql.Int, TPMSubLossName1 || 0)
+      .input("Reason1", sql.NVarChar, Reason1 || "")
+
+      .input("LossName2", sql.Int, LossName2 || 0)
+      .input("SubLossName2", sql.Int, SubLossName2 || 0)
+      .input("TPMSubLossName2", sql.Int, TPMSubLossName2 || 0)
+      .input("Reason2", sql.NVarChar, Reason2 || "")
+
+      .execute("USP_UpdateDowntime123");
+
+    res.json({
+      success: true,
+      message: "✅ Downtime split successfully"
+    });
+
+  } catch (err) {
+    console.error("❌ Split API Error:", err);
+    res.status(500).json({
+      success: false,
+      message: err.message
+    });
+  }
+});
 
 module.exports = router;
