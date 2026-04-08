@@ -249,76 +249,50 @@ WHERE
 
 router.put("/downtime/update", async (request, response) => {
   try {
-    console.log("Received body:", request.body); // Debug log
+    console.log("Received body:", request.body);
 
     const { DowntimeID, LossName, SubLossName, Reason } = request.body;
 
-    // ✅ Validate request body
-    if (!DowntimeID || !LossName || !SubLossName || !Reason) {
+    if (!DowntimeID || !LossName || !SubLossName) {
       return middlewares.standardResponse(
         response,
         null,
         400,
-        "DowntimeID, LossName, SubLossName, and Reason are required"
+        "DowntimeID, LossID, SubLossID required"
       );
     }
 
-    // ✅ Create new SQL request for isolation
-    const sqlRequest = new sqlConnection.sql.Request();
-
-    // 1️⃣ Get LossID dynamically
-    sqlRequest.input("LossName", sqlConnection.sql.VarChar, LossName.trim());
-    const lossQuery = await sqlRequest.query(`
-      SELECT LossID FROM Config_LossCategory WHERE LossName = @LossName
-    `);
-    if (lossQuery.recordset.length === 0) {
-      return middlewares.standardResponse(response, null, 404, "LossName not found in Config_LossCategory");
-    }
-    const LossID = lossQuery.recordset[0].LossID;
-
-    // 2️⃣ Get SubLossID dynamically
-    const subLossRequest = new sqlConnection.sql.Request();
-    subLossRequest.input("SubLossName", sqlConnection.sql.VarChar, SubLossName.trim());
-    const subLossQuery = await subLossRequest.query(`
-      SELECT SubLossID FROM Config_SubLossCategory WHERE SubLossName = @SubLossName
-    `);
-    if (subLossQuery.recordset.length === 0) {
-      return middlewares.standardResponse(response, null, 404, "SubLossName not found in Config_SubLossCategory");
-    }
-    const SubLossID = subLossQuery.recordset[0].SubLossID;
-
-    // 4️⃣ Update Perf_Downtime table
     const updateRequest = new sqlConnection.sql.Request();
-    updateRequest.input("DowntimeID", sqlConnection.sql.Int, DowntimeID);
-    updateRequest.input("LossID", sqlConnection.sql.Int, LossID);
-    updateRequest.input("SubLossID", sqlConnection.sql.Int, SubLossID);
-    updateRequest.input("Reason", sqlConnection.sql.VarChar, Reason.trim());
 
-    const updateQuery = `
-      UPDATE Perf_Downtime 
-      SET 
-        LossID = @LossID, 
-        SubLossID = @SubLossID, 
-        Reason = @Reason
-      WHERE DowntimeID = @DowntimeID;
-    `;
+    await updateRequest
+      .input("DowntimeID", sqlConnection.sql.Int, DowntimeID)
+      .input("LossID", sqlConnection.sql.Int, LossName)        // ✅ directly ID
+      .input("SubLossID", sqlConnection.sql.Int, SubLossName)  // ✅ directly ID
+      .input("Reason", sqlConnection.sql.VarChar, Reason || "")
 
-    await updateRequest.query(updateQuery);
+      .query(`
+        UPDATE Perf_Downtime 
+        SET 
+          LossID = @LossID,
+          SubLossID = @SubLossID,
+          Reason = @Reason
+        WHERE DowntimeID = @DowntimeID
+      `);
 
     return middlewares.standardResponse(
       response,
       null,
       200,
-      "Downtime details (including 4M Loss) updated successfully"
+      "✅ Updated successfully"
     );
 
   } catch (err) {
-    console.error("Error in /downtime/update:", err);
-    middlewares.standardResponse(
+    console.error("Error in update:", err);
+    return middlewares.standardResponse(
       response,
       null,
       500,
-      "Error updating downtime details: " + err.message
+      err.message
     );
   }
 });
