@@ -182,16 +182,13 @@ router.get("/Getdowntime/unassigned/:EquipmentID", async (request, response) => 
         sqlRequest.input("EquipmentID", sqlConnection.sql.VarChar, EquipmentID);
 
         const query = `
-            -- Get the StationID for the given EquipmentID
-           DECLARE @StationID INT;
+           DECLARE @StationID INT ;
 
 SELECT @StationID = StationID
 FROM PPMS_LILBawal.dbo.Config_Equipment
 WHERE EquipmentID = @EquipmentID;
 
--- Get only UNASSIGNED Downtime Details with Shift Validation
-
-SELECT Top 1000
+SELECT TOP 200
     d.DowntimeID,
     d.StationID,
     d.ProdDate,
@@ -199,8 +196,11 @@ SELECT Top 1000
     d.StartTime,
     d.EndTime,
     d.SystemDownTime,
-    d.PLCDownTime as Duration,
-    d.TotalDownTime ,
+    d.PLCDownTime AS Duration,
+    
+    -- Convert TotalDownTime into Minutes
+    (d.PLCDownTime / 60) AS DurationInMinutes,
+
     d.LossID,
     d.Reason,
     l.LossName,
@@ -208,30 +208,28 @@ SELECT Top 1000
     d.[4MLossID],
     l4.[4MLossName],
     sl.SubLossName
-FROM PPMS_LILBawal.dbo.Perf_Downtime d
 
+FROM PPMS_LILBawal.dbo.Perf_Downtime d
 LEFT JOIN Config_LossCategory l 
     ON d.LossID = l.LossID
-
 LEFT JOIN Config_SubLossCategory sl 
     ON d.SubLossID = sl.SubLossID
-
 LEFT JOIN Config_4M_LossCategory l4 
     ON d.[4MLossID] = l4.[4MLossID]
 
--- Validate Shift & Date
-INNER JOIN PPMS_LILBawal.dbo.Prod_ShiftInformation psi
-    ON d.ProdDate = psi.ProdDate
-    AND d.ProdShift = psi.ShiftName
-
 WHERE 
     d.StationID = @StationID
+    
+    -- 🔥 Only show downtime > 10 minutes
+    AND (d.PLCDownTime / 60) > 10
+    
     AND (
         d.LossID IS NULL OR d.LossID = 0 
         OR d.SubLossID IS NULL OR d.SubLossID = 0
         OR d.[4MLossID] IS NULL OR d.[4MLossID] = 5
     )
-        order by d.LastUpdatedTime desc;
+
+ORDER BY d.LastUpdatedTime DESC;
         `;
 
         const result = await sqlRequest.query(query);
