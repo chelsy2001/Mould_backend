@@ -9,7 +9,7 @@ const { sql, config } = require('../databases/ssmsConn.js');
 const router = express.Router();
 
 // API endpoint: Get PM Approval details
-router.get("/pm-approval/:mouldId", async (req, res) => {
+router.get("/pm-approval", async (req, res) => {
   const { mouldId } = req.params;
 
   try {
@@ -42,8 +42,7 @@ LEFT JOIN Config_User CU
       ON CL.UserID = CU.UserID
 LEFT JOIN [dbo].[Mould_Executed_PMCheckListHistory] H
       ON CL.UID = H.UID
-WHERE CL.MouldID = @MouldID 
-  AND CL.PMStatus = 6
+WHERE  CL.PMStatus = 6
 ORDER BY CL.TimeStamp DESC;
 
     `;
@@ -206,8 +205,9 @@ router.post("/ApproveChecklist", async (req, res) => {
 
 
 //get checkpoints in checkpoint screen
-router.get('/GetCheckPoints/:CheckListID', (request, response) => {
+router.get('/GetCheckPoints/:CheckListID/:MouldID', (request, response) => {
   const CheckListID = request.params.CheckListID;
+  const MouldID = request.params.MouldID;
 
   const query = `
     SELECT 
@@ -237,11 +237,13 @@ JOIN
     Config_Mould_PMCheckList c
     ON p.CheckListID = c.CheckListID
 WHERE 
-    p.CheckListID = @CheckListID ;
+    p.CheckListID = @CheckListID 
+    AND p.MouldID = @MouldID
   `;
 
   const sqlRequest = new sqlConnection.sql.Request();
   sqlRequest.input('CheckListID', sqlConnection.sql.Int, CheckListID);
+  sqlRequest.input('MouldID', sqlConnection.sql.VarChar(50), MouldID);
 
   sqlRequest.query(query, (err, result) => {
     if (err) {
@@ -254,13 +256,38 @@ WHERE
 
 // update api to update the Checkpointsn observation
 router.post('/UpdateCheckPoint', async (req, res) => {
-  const { CheckPointID, Observation, OKNOK } = req.body;
+  const { CheckPointID, UID, MouldID, Observation, OKNOK } = req.body;
 
-  if (!CheckPointID || OKNOK === undefined) {
-    return middlewares.standardResponse(res, null, 400, "Missing required fields.");
+  if ((!CheckPointID && !UID) || OKNOK === undefined) {
+    return middlewares.standardResponse(res, null, 400, "Missing required fields. Provide CheckPointID or UID, and OKNOK.");
   }
 
   try {
+    let resolvedMouldID = MouldID;
+
+    if (!resolvedMouldID) {
+      const idRequest = new sqlConnection.sql.Request();
+      let idQuery;
+
+      if (UID) {
+        idQuery = `SELECT MouldID FROM Mould_Execute_PMCheckPoint WHERE UID = @UID`;
+        idRequest.input('UID', sql.Int, UID);
+      } else {
+        idQuery = `SELECT MouldID FROM Mould_Execute_PMCheckPoint WHERE CheckPointID = @CheckPointID`;
+        idRequest.input('CheckPointID', sql.Int, CheckPointID);
+      }
+
+      const idResult = await idRequest.query(idQuery);
+      if (idResult.recordset.length === 0) {
+        return middlewares.standardResponse(res, null, 404, "Unable to resolve MouldID from CheckPointID/UID.");
+      }
+      if (!UID && idResult.recordset.length > 1) {
+        return middlewares.standardResponse(res, null, 400, "Multiple matching checkpoints found. Send MouldID or UID.");
+      }
+
+      resolvedMouldID = idResult.recordset[0].MouldID;
+    }
+
     const query = `
       UPDATE Mould_Execute_PMCheckPoint
       SET 
@@ -269,12 +296,14 @@ router.post('/UpdateCheckPoint', async (req, res) => {
         LastUpdatedTime = GETDATE()
       WHERE 
         CheckPointID = @CheckPointID
+        AND MouldID = @MouldID
     `;
 
     const sqlRequest = new sqlConnection.sql.Request();
     sqlRequest.input('Observation', sql.NVarChar, Observation ?? '');
     sqlRequest.input('OKNOK', sql.Int, OKNOK); // 1 for OK, 2 for NOK
     sqlRequest.input('CheckPointID', sql.Int, CheckPointID);
+    sqlRequest.input('MouldID', sql.NVarChar(50), resolvedMouldID);
 
     await sqlRequest.query(query);
 

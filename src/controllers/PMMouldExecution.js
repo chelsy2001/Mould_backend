@@ -10,63 +10,102 @@ const router = express.Router();
 const storage = multer.memoryStorage();
 const upload = multer({ storage });
 
-router.get('/GetExecuteCheckPoints/:CheckListID', (request, response) => {
-  const CheckListID = request.params.CheckListID;
+router.get('/GetExecuteCheckPoints/:CheckListID/:MouldID', (request, response) => {
+
+  const { CheckListID, MouldID } = request.params;
 
   const query = `
     SELECT 
-    p.[UID],
-    p.[CheckListID],
-    p.[CheckPointID],
-    p.[CheckPointName],
-    p.[CheckArea],
-    p.[CheckPointItems],
-    p.[CheckPointArea],
-    p.[CheckingMethod],
-    p.[JudgementCriteria],
-    p.[CheckListType],
-    p.[CheckPointType],
-    p.[UOM],
-    p.[UpperLimit],
-    p.[LowerLimit],
-    p.[Standard],
-    p.[CheckPointValue],
-    p.[OKNOK],
-    p.[Observation],
-    p.[LastUpdatedTime],
-    c.[CheckListName]
-FROM 
-    Mould_Execute_PMCheckPoint p
-JOIN 
-    Config_Mould_PMCheckList c
-    ON p.CheckListID = c.CheckListID
-WHERE 
-    p.CheckListID = @CheckListID  AND 
-    p.CheckListType = 2;
+        p.[UID],
+        p.[CheckListID],
+        p.[CheckPointID],
+        p.[CheckPointName],
+        p.[CheckArea],
+        p.[CheckPointItems],
+        p.[CheckPointArea],
+        p.[CheckingMethod],
+        p.[JudgementCriteria],
+        p.[CheckListType],
+        p.[CheckPointType],
+        p.[UOM],
+        p.[UpperLimit],
+        p.[LowerLimit],
+        p.[Standard],
+        p.[CheckPointValue],
+        p.[OKNOK],
+        p.[Observation],
+        p.[LastUpdatedTime],
+        p.[MouldID],
+        c.[CheckListName]
+    FROM 
+        Mould_Execute_PMCheckPoint p
+    INNER JOIN 
+        Config_Mould_PMCheckList c
+        ON p.CheckListID = c.CheckListID
+    WHERE 
+        p.CheckListID = @CheckListID
+        AND p.MouldID = @MouldID
+        AND p.CheckListType = 2;
   `;
 
   const sqlRequest = new sqlConnection.sql.Request();
   sqlRequest.input('CheckListID', sqlConnection.sql.Int, CheckListID);
+  sqlRequest.input('MouldID', sqlConnection.sql.NVarChar(50), MouldID);
 
   sqlRequest.query(query, (err, result) => {
     if (err) {
-      middlewares.standardResponse(response, null, 300, 'Error executing query: ' + err);
-    } else {
-      middlewares.standardResponse(response, result.recordset, 200, 'Success');
+      return middlewares.standardResponse(
+        response,
+        null,
+        500,
+        'Error executing query: ' + err.message
+      );
     }
+
+    return middlewares.standardResponse(
+      response,
+      result.recordset,
+      200,
+      'Success'
+    );
   });
 });
 
 //Update API to update the OKNOK and obeservation
 
 router.post('/ExecuteUpdateCheckPointStatus', async (req, res) => {
-  const { CheckPointID, Observation, OKNOK, UpperLimit, LowerLimit } = req.body;
+  const { CheckPointID, UID, MouldID, Observation, OKNOK, UpperLimit, LowerLimit } = req.body;
 
-  if (!CheckPointID || OKNOK === undefined) {
-    return middlewares.standardResponse(res, null, 400, "Missing required fields.");
+  if ((!CheckPointID && !UID) || OKNOK === undefined) {
+    return middlewares.standardResponse(res, null, 400, "Missing required fields. Provide CheckPointID or UID, and OKNOK.");
   }
 
   try {
+    let resolvedMouldID = MouldID;
+
+    if (!resolvedMouldID) {
+      const idRequest = new sqlConnection.sql.Request();
+      let idQuery;
+
+      if (UID) {
+        idQuery = `SELECT MouldID FROM Mould_Execute_PMCheckPoint WHERE UID = @UID`;
+        idRequest.input('UID', sql.Int, UID);
+      } else {
+        idQuery = `SELECT MouldID FROM Mould_Execute_PMCheckPoint WHERE CheckPointID = @CheckPointID`;
+        idRequest.input('CheckPointID', sql.Int, CheckPointID);
+      }
+
+      const idResult = await idRequest.query(idQuery);
+      if (idResult.recordset.length === 0) {
+        return middlewares.standardResponse(res, null, 404, "Unable to resolve MouldID from CheckPointID/UID.");
+      }
+      if (!UID && idResult.recordset.length > 1) {
+        return middlewares.standardResponse(res, null, 400, "Multiple matching checkpoints found. Send MouldID or UID.");
+      }
+
+      resolvedMouldID = idResult.recordset[0].MouldID;
+    }
+
     const sqlRequest = new sqlConnection.sql.Request();
 
     // ✅ Convert values safely
@@ -92,7 +131,7 @@ router.post('/ExecuteUpdateCheckPointStatus', async (req, res) => {
         LowerLimit = @LowerLimit,
         LastUpdatedTime = GETDATE()
       WHERE
-        CheckPointID = @CheckPointID
+        CheckPointID = @CheckPointID and MouldID = @MouldID
     `;
 
     sqlRequest.input('Observation', sql.NVarChar, Observation ?? '');
@@ -103,6 +142,7 @@ router.post('/ExecuteUpdateCheckPointStatus', async (req, res) => {
     sqlRequest.input('LowerLimit', sql.Numeric(10, 2), lower);
 
     sqlRequest.input('CheckPointID', sql.Int, CheckPointID);
+    sqlRequest.input('MouldID', sql.NVarChar(50), resolvedMouldID);
 
     await sqlRequest.query(query);
 
@@ -113,89 +153,161 @@ router.post('/ExecuteUpdateCheckPointStatus', async (req, res) => {
 });
 
 router.post('/SubmitPMChecklist', async (req, res) => {
-  const { CheckListID } = req.body;
+  const { CheckListID, MouldID } = req.body;
 
-  if (!CheckListID) {
-    return middlewares.standardResponse(res, null, 400, "Missing CheckListID");
+  if (!CheckListID || !MouldID) {
+    return middlewares.standardResponse(
+      res,
+      null,
+      400,
+      "Missing CheckListID or MouldID"
+    );
   }
 
   try {
-    // 1. Check count of NULL OKNOK entries
+    // 1. Validate Checklist exists for selected Mould
+    const checklistResult = await new sqlConnection.sql.Request()
+      .input('CheckListID', sqlConnection.sql.Int, CheckListID)
+      .input('MouldID', sqlConnection.sql.NVarChar(50), MouldID)
+      .query(`
+        SELECT TOP 1 *
+        FROM Mould_Execute_PMCheckList
+        WHERE CheckListID = @CheckListID
+          AND MouldID = @MouldID
+      `);
+
+    if (checklistResult.recordset.length === 0) {
+      return middlewares.standardResponse(
+        res,
+        null,
+        404,
+        "Checklist not found for selected Mould."
+      );
+    }
+
+    // 2. Check Pending Checkpoints
     const nullCountResult = await new sqlConnection.sql.Request()
       .input('CheckListID', sqlConnection.sql.Int, CheckListID)
+      .input('MouldID', sqlConnection.sql.NVarChar(50), MouldID)
       .query(`
-        SELECT COUNT(*) AS NullCount 
-        FROM Mould_Execute_PMCheckPoint 
-        WHERE OKNOK IS NULL AND CheckListID = @CheckListID AND CheckListType = 2
+        SELECT COUNT(*) AS NullCount
+        FROM Mould_Execute_PMCheckPoint
+        WHERE CheckListID = @CheckListID
+          AND MouldID = @MouldID
+          AND CheckListType = 2
+          AND OKNOK IS NULL
       `);
-    const nullCount = nullCountResult.recordset[0].NullCount;
 
-    if (nullCount > 0) {
-      return middlewares.standardResponse(res, null, 400, "Please execute all the checkpoints.");
+    if (nullCountResult.recordset[0].NullCount > 0) {
+      return middlewares.standardResponse(
+        res,
+        null,
+        400,
+        "Please execute all the checkpoints."
+      );
     }
 
-    // 2. Check count of NOK entries
+    // 3. Check NOK
     const nokCountResult = await new sqlConnection.sql.Request()
       .input('CheckListID', sqlConnection.sql.Int, CheckListID)
+      .input('MouldID', sqlConnection.sql.NVarChar(50), MouldID)
       .query(`
-        SELECT COUNT(*) AS NOKCount 
-        FROM Mould_Execute_PMCheckPoint 
-        WHERE OKNOK = 2 AND CheckListID = @CheckListID AND CheckListType = 2
-      `);
-    const nokCount = nokCountResult.recordset[0].NOKCount;
-
-    if (nokCount > 0) {
-      return middlewares.standardResponse(res, null, 400, "Please check NOK checkpoint.");
-    }
-
-    // 3. Fetch MouldID
-    const mouldResult = await new sqlConnection.sql.Request()
-      .input('CheckListID', sqlConnection.sql.Int, CheckListID)
-      .query(`
-        SELECT MouldID 
-        FROM Mould_Execute_PMCheckList 
+        SELECT COUNT(*) AS NOKCount
+        FROM Mould_Execute_PMCheckPoint
         WHERE CheckListID = @CheckListID
+          AND MouldID = @MouldID
+          AND CheckListType = 2
+          AND OKNOK = 2
       `);
-    const MouldID = mouldResult.recordset[0]?.MouldID;
 
-    if (!MouldID) {
-      return middlewares.standardResponse(res, null, 404, "MouldID not found.");
+    if (nokCountResult.recordset[0].NOKCount > 0) {
+      return middlewares.standardResponse(
+        res,
+        null,
+        400,
+        "Please check NOK checkpoint."
+      );
     }
 
-    // 4. Update Config_PMSchedule PMStatus to 6
+    // 4. Update Checklist Status
     await new sqlConnection.sql.Request()
+      .input('CheckListID', sqlConnection.sql.Int, CheckListID)
+      .input('MouldID', sqlConnection.sql.NVarChar(50), MouldID)
+      .query(`
+        UPDATE Mould_Execute_PMCheckList
+        SET PMStatus = 6
+        WHERE CheckListID = @CheckListID
+          AND MouldID = @MouldID
+      `);
+
+    // 5. Update PM Schedule
+    await new sqlConnection.sql.Request()
+      .input('MouldID', sqlConnection.sql.NVarChar(50), MouldID)
       .query(`
         UPDATE Config_Mould_PMSchedule
-        SET PMStatus = 6  WHERE CheckListID = ${CheckListID} And MouldID='${MouldID}'
+        SET PMStatus = 6
+        WHERE MouldID = @MouldID
       `);
 
-    // 5. Update Mould_Execute_PMCheckList PMStatus to 6
+    // 6. Update Monitoring
     await new sqlConnection.sql.Request()
+      .input('MouldID', sqlConnection.sql.NVarChar(50), MouldID)
       .query(`
-        UPDATE Mould_Execute_PMCheckList 
-        SET PMStatus = 6 
-        WHERE CheckListID = ${CheckListID}
+        UPDATE Mould_Monitoring
+        SET MouldPMStatus = 6
+        WHERE MouldID = @MouldID
       `);
 
-    // 6. Fetch ActualLife from Mould_Monitoring
+    // 7. Get Current Mould Life
     const lifeResult = await new sqlConnection.sql.Request()
+      .input('MouldID', sqlConnection.sql.NVarChar(50), MouldID)
       .query(`
-        SELECT MouldActualLife 
-        FROM Mould_Monitoring 
-        WHERE MouldID = '${MouldID}'
+        SELECT MouldActualLife
+        FROM Mould_Monitoring
+        WHERE MouldID = @MouldID
       `);
-    const ActualLife = lifeResult.recordset[0]?.MouldActualLife ?? 0;
 
-    // 7. Insert into Mould_Genealogy
+    const ActualLife = lifeResult.recordset[0]?.MouldActualLife || 0;
+
+    // 8. Insert Genealogy
     await new sqlConnection.sql.Request()
+      .input('MouldID', sqlConnection.sql.NVarChar(50), MouldID)
+      .input('ActualLife', sqlConnection.sql.Int, ActualLife)
       .query(`
-        INSERT INTO Mould_Genealogy (MouldID, CurrentMouldLife, ParameterID, ParameterValue, Timestamp)
-        VALUES ('${MouldID}', ${ActualLife}, 5, 6, GETDATE())
+        INSERT INTO Mould_Genealogy
+        (
+            MouldID,
+            CurrentMouldLife,
+            ParameterID,
+            ParameterValue,
+            [Timestamp]
+        )
+        VALUES
+        (
+            @MouldID,
+            @ActualLife,
+            5,
+            6,
+            GETDATE()
+        )
       `);
 
-    return middlewares.standardResponse(res, null, 200, "PM Checklist submitted successfully.");
+    return middlewares.standardResponse(
+      res,
+      null,
+      200,
+      "PM Checklist submitted successfully."
+    );
+
   } catch (err) {
-    return middlewares.standardResponse(res, null, 500, "Error: " + err.message);
+    console.error(err);
+
+    return middlewares.standardResponse(
+      res,
+      null,
+      500,
+      err.message
+    );
   }
 });
 
